@@ -1,0 +1,43 @@
+[package]
+name = "zipscope-read"
+description = "Archive decoders for Zipscope preview and extraction"
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+publish.workspace = true
+version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["module"]
+# The wasm exports and the allocator of the read module. The write module
+# (crates/write) uses the decoders of this crate without them, because a
+# wasm module has one allocator and one set of exports.
+module = []
+
+[dependencies]
+foldhash.workspace = true
+flate2 = { version = "1.1.9", default-features = false, features = ["zlib-rs"] }
+rawzip.workspace = true
+# Full Unicode case folding (CaseFolding.txt, status C and F) for the
+# collision keys of the extraction planner.
+unicase = "2.10.0"
+zipscope-heap = { path = "../heap" }
+zipscope-layout = { path = "../layout" }
+zipscope-marks = { path = "../marks" }
+wasm-bindgen.workspace = true
+zstd-safe = { version = "8.0.0", default-features = false }
+
+[dev-dependencies]
+# Only the tests normalize names; the read wasm gets the NFC form from JS.
+unicode-normalization = "0.1.26"
+zstd = { version = "0.14.0", default-features = false }
+zipscope-core = { path = "../core" }
+zipscope-testkit = { path = "../testkit" }
+
+[lints]
+workspace = true

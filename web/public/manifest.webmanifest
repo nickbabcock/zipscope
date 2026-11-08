@@ -1,0 +1,20 @@
+{
+  "id": "/",
+  "name": "Zipscope",
+  "short_name": "Zipscope",
+  "description": "See what is in a zip, where the space went and whether the archive is healthy. The file stays on your device.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [{ "src": "/app-icon.svg", "sizes": "any", "type": "image/svg+xml" }],
+  "file_handlers": [
+    {
+      "action": "/?launch",
+      "accept": { "application/zip": [".zip"] },
+      "launch_type": "multiple-clients"
+    }
+  ],
+  "launch_handler": { "client_mode": "navigate-new" }
+}

@@ -1,0 +1,11 @@
+packages:
+  - web
+catalog:
+  "@types/node": 24.19.2
+  typescript: 7.0.2
+  vite: 8.3.5
+minimumReleaseAge: 1440
+allowBuilds:
+  esbuild: true
+  workerd: true
+  "@swc/core": false

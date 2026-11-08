@@ -1,0 +1,718 @@
+/* The static front door. The CSP blocks inline styles, and the stylesheet
+   blocks the first paint, so the first paint is the styled page, before any
+   script runs. This file uses plain CSS and ids. It copies the values of
+   `tokens.stylex.ts`. A unit test (`door.test.ts`) fails when a value differs. */
+:root {
+  --door-ground: #ffffff;
+  --door-panel: #fafaf9;
+  --door-raised: #f5f5f4;
+  --door-rule: #e7e5e4;
+  --door-rule-strong: #79716b;
+  --door-ink: #1c1917;
+  --door-ink-muted: #57534d;
+  --door-water: #0069a8;
+  --door-focus: #0084d1;
+  --door-warn: #bb4d00;
+  --door-bar: #79716b;
+  --door-bar-track: #e7e5e4;
+  --door-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --door-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --door-top: 44px;
+  --door-status: 28px;
+  --door-gutter: clamp(16px, 7vw, 112px);
+  --door-row-height: 72px;
+  /* Door-only sizes: a question leads, and its answer is the value. */
+  --door-question: clamp(32px, 4.4vw, 56px);
+  --door-answer: 22px;
+  --door-statement: clamp(28px, 4.4vw, 56px);
+  --door-heading: 22px;
+  --door-subtitle: 17px;
+  --door-reading: 16px;
+  --door-lead: 15px;
+  --door-title: 14px;
+  --door-body: 13px;
+  --door-small: 12px;
+  --door-label: 11px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --door-ground: #0c0a09;
+    --door-panel: #1c1917;
+    --door-raised: #292524;
+    --door-rule: #292524;
+    --door-rule-strong: #79716b;
+    --door-ink: #f5f5f4;
+    --door-ink-muted: #a6a09b;
+    --door-water: #00bcff;
+    --door-focus: #00a6f4;
+    --door-warn: #ffb900;
+    --door-bar: #79716b;
+    --door-bar-track: #292524;
+  }
+}
+
+/* The row stacks the line above the buttons, because the buttons keep their
+   width and a line beside them would need more height than the row has. */
+@media (max-width: 920px) {
+  :root {
+    --door-row-height: 112px;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --door-gutter: 16px;
+    --door-answer: 17px;
+    --door-subtitle: 15px;
+  }
+}
+
+/* The table of the tool has its focus ring on the selected row. After a control
+   of the door moves the focus to the table, no row is selected, so the first row
+   has the ring. TableView sets the attribute only for that move, and removes it at
+   a blur and at the first selection, so a real file cannot reach this rule. The ring
+   marks one row, not the whole pane. StyleX rules have a higher specificity than an
+   id. */
+#list-viewport[data-first-ring]:focus-visible [data-row="0"] {
+  box-shadow: inset 0 0 0 2px var(--door-focus) !important;
+}
+
+html {
+  background-color: var(--door-ground);
+  color: var(--door-ink);
+  font-family: var(--door-ui);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The word mark is the visible form of this heading. */
+#door-h1 {
+  clip-path: inset(50%);
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+/* The same frame as the app: top bar, work area and map margin. */
+#door-frame {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--door-top) minmax(0, 1fr) var(--door-status);
+  height: 100dvh;
+  overflow: hidden;
+}
+
+#door-top {
+  align-items: center;
+  background-color: var(--door-panel);
+  border-bottom: 1px solid var(--door-rule);
+  box-sizing: border-box;
+  column-gap: 12px;
+  display: flex;
+  padding-inline: 12px;
+}
+
+#door-mark {
+  font-size: var(--door-lead);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+}
+
+/* What Zipscope is, beside the word mark. The app moves this element into its
+   top bar on the first door. */
+#door-tagline {
+  color: var(--door-ink-muted);
+  font-size: var(--door-body);
+  font-weight: 400;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-door="resume"] #door-tagline {
+  display: none;
+}
+
+#door-work {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+#door-margin {
+  background-color: var(--door-panel);
+  border-top: 1px solid var(--door-rule);
+}
+
+/* The order property puts the sticky row last on the screen, so that it stays
+   at the bottom during all of the scroll. It stays before the rest of the page
+   in the DOM, so that the tab order and the reading order follow the first
+   view. */
+#door-page {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.5;
+  min-height: 100%;
+  /* The hidden text in the answers stays in the scroller of the work area. It
+     does not add to the height of the document. */
+  position: relative;
+}
+
+#door-questions {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-height: calc(100dvh - var(--door-top) - var(--door-status) - var(--door-row-height));
+  order: 1;
+  padding-inline: var(--door-gutter);
+}
+
+/* The free height of the first view goes to the answers. */
+.door-q {
+  flex: 1 1 auto;
+  padding-block: 24px 20px;
+}
+
+.door-q {
+  border-top: 1px solid var(--door-rule);
+}
+
+/* One quiet line above the rule of the first answer. It covers all three. */
+#door-demo {
+  color: var(--door-ink-muted);
+  flex-shrink: 0;
+  font-size: var(--door-title);
+  line-height: 20px;
+  margin: 0;
+  padding-block: 20px 16px;
+}
+
+#door-demo code {
+  white-space: nowrap;
+}
+
+.door-hidden {
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.door-q h2 {
+  font-size: var(--door-question);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  margin: 0;
+  text-wrap: balance;
+}
+
+/* In a short window, all three questions stay on the screen. */
+@media (max-height: 759px) {
+  .door-q h2 {
+    font-size: clamp(28px, 6.2vh, 56px);
+  }
+}
+
+.door-a {
+  font-size: var(--door-answer);
+  line-height: 1.4;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The numbers lead the answer. */
+.door-a b {
+  font-weight: 650;
+}
+
+.door-q h2 + .door-a {
+  margin-top: 10px;
+}
+
+/* The same form as the tag of the tool (`DemoTag.tsx`). */
+.door-tag {
+  background-color: var(--door-raised);
+  border-radius: 4px;
+  display: inline-block;
+  font-size: var(--door-label);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 16px;
+  margin-right: 4px;
+  padding-inline: 5px;
+  text-transform: uppercase;
+}
+
+#door-page code,
+#explainer code {
+  font-family: var(--door-mono);
+  font-size: 0.94em;
+  white-space: nowrap;
+}
+
+/* The slot keeps the space of the control, so that the text does not move
+   when the app draws the control. */
+.door-see {
+  display: inline-block;
+  min-height: 1lh;
+  min-width: 2.6em;
+  vertical-align: top;
+}
+
+/* The bar of the tool, at the scale of the page. */
+#door-bar {
+  align-items: center;
+  column-gap: 12px;
+  display: flex;
+  font-size: var(--door-body);
+  line-height: 12px;
+  margin-top: 10px;
+}
+
+#door-bar-share {
+  font-size: var(--door-subtitle);
+  font-weight: 650;
+}
+
+#door-bar-track {
+  background-color: var(--door-bar-track);
+  border-radius: 1px;
+  flex-grow: 1;
+  height: 12px;
+  overflow: hidden;
+}
+
+#door-bar-fill {
+  background-color: var(--door-bar);
+  height: 100%;
+  width: 64%;
+}
+
+/* Real rows of the sample, on the 24 px pitch of the tool, with its bars. A name,
+   its bar and its size stay near each other. The rows do not react, so nothing
+   here looks like a control. */
+#door-rows {
+  border-collapse: collapse;
+  cursor: default;
+  font-size: var(--door-body);
+  margin-top: 12px;
+  max-width: 480px;
+  width: 100%;
+}
+
+/* The same form as the label of the largest files in the tool. */
+#door-rows caption {
+  font-size: var(--door-small);
+  font-weight: 600;
+  line-height: 20px;
+  text-align: left;
+}
+
+#door-rows tr {
+  height: 24px;
+}
+
+#door-rows tr + tr {
+  border-top: 1px solid var(--door-rule);
+}
+
+#door-rows th {
+  font-weight: 400;
+  padding: 0;
+  text-align: left;
+}
+
+.door-row-bar {
+  padding: 0 12px 0 0;
+  text-align: right;
+  width: 48px;
+}
+
+.door-row-bar svg {
+  display: block;
+  fill: var(--door-bar);
+}
+
+.door-row-size {
+  padding: 0;
+  text-align: right;
+  white-space: nowrap;
+  width: 76px;
+}
+
+#door-rows tr:first-child .door-row-size {
+  font-weight: 650;
+}
+
+.door-icon {
+  color: var(--door-warn);
+  flex-shrink: 0;
+  margin-right: 6px;
+  vertical-align: -2px;
+}
+
+.door-warn {
+  color: var(--door-warn);
+  font-weight: 600;
+}
+
+#door-row {
+  align-items: center;
+  background-color: var(--door-ground);
+  border-top: 1px solid var(--door-rule);
+  bottom: 0;
+  box-sizing: border-box;
+  column-gap: 16px;
+  display: flex;
+  flex-shrink: 0;
+  height: var(--door-row-height);
+  order: 3;
+  padding-inline: var(--door-gutter);
+  position: sticky;
+  z-index: 1;
+}
+
+#door-action {
+  font-size: var(--door-subtitle);
+  font-weight: 550;
+  line-height: 1.4;
+  margin: 0;
+  min-width: 0;
+  text-wrap: balance;
+}
+
+/* All lines share one grid cell and only one shows, so the cell keeps the height
+   of the longest line, and the buttons do not move during a drag. */
+#door-action {
+  display: grid;
+}
+
+.door-line {
+  grid-area: 1 / 1;
+  visibility: hidden;
+}
+
+.door-line[data-line="fine"] {
+  visibility: visible;
+}
+
+@media (pointer: coarse) {
+  .door-line[data-line="fine"] {
+    visibility: hidden;
+  }
+
+  .door-line[data-line="coarse"] {
+    visibility: visible;
+  }
+}
+
+/* The entry module did not run, so a drop does nothing. The line that asks for a
+   drop goes, and the row keeps its height. */
+#door-row:has(#door-failed:not([hidden])) #door-action {
+  display: none;
+}
+
+#door-noscript,
+#door-failed {
+  color: var(--door-ink-muted);
+  font-size: var(--door-body);
+  margin: 0;
+}
+
+#door-buttons {
+  column-gap: 12px;
+  display: flex;
+  flex-shrink: 0;
+  margin-left: auto;
+  min-height: 36px;
+}
+
+/* A file over the window. The edge is fixed on the work area, above the sticky
+   row, and does not move with the scroll. */
+#front-door[data-dragging]::before {
+  border: 2px dashed var(--door-water);
+  bottom: calc(var(--door-status) + 4px);
+  content: "";
+  left: 4px;
+  pointer-events: none;
+  position: fixed;
+  right: 4px;
+  top: calc(var(--door-top) + 4px);
+  z-index: 2;
+}
+
+#front-door[data-dragging] #door-row {
+  background-color: var(--door-panel);
+}
+
+#front-door[data-dragging] .door-line {
+  visibility: hidden;
+}
+
+#front-door[data-dragging] .door-line[data-line="dragging"] {
+  visibility: visible;
+}
+
+/* The sticky row does not cover an element that gets the focus. */
+#front-door {
+  scroll-padding-bottom: var(--door-row-height);
+}
+
+/* Below 360 px the action line can take three lines. Then the stacked row of
+   a coarse pointer needs 8 px more for the 44 px buttons. A wider row keeps
+   112 px, so it does not cover more of the answers above it. */
+@media (pointer: coarse) and (max-width: 359px) {
+  :root {
+    --door-row-height: 120px;
+  }
+}
+
+/* A coarse pointer gets a hit area of 44 px, with no change to the line. The
+   buttons of the row are 44 px high (see FrontDoor.tsx), so their slot is too. */
+@media (pointer: coarse) {
+  #door-buttons {
+    min-height: 44px;
+  }
+
+  .door-see button {
+    position: relative;
+  }
+
+  .door-see button::after {
+    content: "";
+    inset: -11px -8px;
+    position: absolute;
+  }
+}
+
+/* The recent archives come after the row of actions on the compact door, and
+   after the questions on the first door. The app draws them (see
+   FrontDoor.tsx). Before that, the slot is empty and takes no space. */
+#door-recent {
+  flex-shrink: 0;
+  order: 2;
+}
+
+#explainer {
+  border-top: 1px solid var(--door-rule);
+  box-sizing: border-box;
+  flex-shrink: 0;
+  order: 2;
+  padding: 64px var(--door-gutter);
+}
+
+.door-pair {
+  max-width: 68ch;
+}
+
+.door-pair + .door-pair {
+  margin-top: 40px;
+}
+
+.door-pair h2 {
+  font-size: var(--door-heading);
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.door-pair p {
+  font-size: var(--door-reading);
+  line-height: 1.6;
+  margin: 8px 0 0;
+}
+
+#front-test:empty {
+  display: none;
+}
+
+#explainer a {
+  border-radius: 2px;
+  color: var(--door-water);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+#explainer a:focus-visible {
+  outline: 2px solid var(--door-focus);
+  outline-offset: 1px;
+}
+
+#explainer kbd {
+  background-color: var(--door-ground);
+  border: 1px solid var(--door-rule-strong);
+  border-radius: 4px;
+  font-family: var(--door-mono);
+  font-size: var(--door-body);
+  line-height: 20px;
+  padding-inline: 6px;
+}
+
+#door-close {
+  margin-top: 96px;
+}
+
+#door-close h2 {
+  font-size: var(--door-statement);
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  margin: 0;
+  text-wrap: balance;
+}
+
+/* Two columns on the width of the bands, so the right half is not blank. */
+@media (min-width: 1200px) {
+  #explainer {
+    column-gap: 64px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    row-gap: 40px;
+  }
+
+  .door-pair + .door-pair {
+    margin-top: 0;
+  }
+
+  #door-close {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 920px) {
+  #door-row {
+    align-items: stretch;
+    flex-direction: column;
+    justify-content: center;
+    row-gap: 10px;
+  }
+
+  /* A short line sits directly above the buttons. */
+  .door-line {
+    align-self: end;
+  }
+
+  #door-buttons {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  #door-action {
+    font-size: var(--door-lead);
+  }
+
+  #explainer {
+    padding-block: 40px;
+  }
+}
+
+/* After a first file: the row of actions at the top, then the reference. */
+html[data-door="compact"] #door-questions {
+  display: none;
+}
+
+html[data-door="compact"] #door-row {
+  align-items: center;
+  border-top-width: 0;
+  flex-direction: row;
+  flex-wrap: wrap;
+  height: auto;
+  justify-content: flex-start;
+  order: 0;
+  padding-block: 24px;
+  position: static;
+  row-gap: 12px;
+}
+
+html[data-door="compact"] #door-buttons {
+  margin-left: 0;
+  order: 0;
+}
+
+html[data-door="compact"] #door-action {
+  color: var(--door-ink-muted);
+  font-size: var(--door-body);
+  font-weight: 400;
+  order: 1;
+}
+
+html[data-door="compact"] #door-action {
+  display: block;
+}
+
+html[data-door="compact"] .door-line,
+html[data-door="compact"] #front-door[data-dragging] .door-line {
+  display: none;
+}
+
+html[data-door="compact"] .door-line[data-line="compact"],
+html[data-door="compact"] #front-door[data-dragging] .door-line[data-line="dragging"] {
+  display: inline;
+  visibility: visible;
+}
+
+html[data-door="compact"] #front-door[data-dragging] .door-line[data-line="compact"] {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  html[data-door="compact"] .door-line[data-line="compact"] {
+    display: none;
+  }
+}
+
+/* In a low window a sticky row takes too much of the view. It stays in the page,
+   directly below the questions. */
+@media (max-height: 560px) {
+  html:not([data-door="compact"]) #door-row {
+    order: 2;
+    position: static;
+  }
+
+  #door-questions {
+    min-height: 0;
+  }
+
+  #explainer {
+    order: 3;
+  }
+
+  #front-door {
+    scroll-padding-bottom: 0;
+  }
+}
+
+/* A reload of a tab with an archive, or a new tab that waits for a file: the
+   questions do not show for a moment before the state of the app. */
+html[data-door="resume"] #door-page {
+  display: none;
+}
+
+/* With a failed entry module, no state of the app follows, so the row shows why. */
+html[data-door="resume"]:has(#door-failed:not([hidden])) #door-page {
+  display: flex;
+}
+
+html[data-door="resume"]:has(#door-failed:not([hidden])) #door-questions,
+html[data-door="resume"]:has(#door-failed:not([hidden])) #explainer {
+  display: none;
+}
+
+/* The close leads into the sticky row. The compact row is at the top, and this
+   browser cannot read a file, so these two states have no close. */
+html[data-door="compact"] #door-close,
+html[data-door="unsupported"] #door-close {
+  display: none;
+}

@@ -1,0 +1,57 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.e2e.tsbuildinfo",
+    "target": "ES2024",
+    // The tests run in Node and send functions to run in the page.
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node", "vite/client"],
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    // `workers.ts` preloads the Archive panel chunk, the extraction chunk
+    // and the open choice, so the check reaches their components.
+    "jsx": "preserve",
+    "jsxImportSource": "@solidjs/web",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true
+  },
+  // The browser tests and the benchmarks use parts of src, so the src modules
+  // are checked here too.
+  "include": [
+    "e2e",
+    "browser",
+    "node",
+    "scripts",
+    "src/**/*.ts",
+    "src/archive/*.tsx",
+    "src/shell/icons.tsx",
+    "src/shell/ExtractSlot.tsx",
+    "src/shell/CutPath.tsx",
+    "src/shell/FileText.tsx",
+    "src/extract/*.tsx",
+    "src/front/DemoTag.tsx",
+    "src/lifecycle/OpenChoice.tsx",
+    "bench/reader/*.ts"
+  ],
+  "exclude": [
+    "src/**/*.test.ts",
+    // The entry module loads the whole app. The app project checks it.
+    "src/main.ts",
+    "src/parse/worker.ts",
+    "src/read/worker.ts",
+    "src/sw.ts",
+    "src/write/encoder.ts",
+    "src/write/lead.ts",
+    "src/write/memory.ts",
+    "browser/*-worker.ts",
+    "bench/reader/worker.ts"
+  ]
+}

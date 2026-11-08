@@ -1,0 +1,20 @@
+[package]
+name = "zipscope-layout"
+description = "The byte map of a zip archive for the Zipscope Archive panel"
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+publish.workspace = true
+version.workspace = true
+
+[dependencies]
+rawzip.workspace = true
+
+[dev-dependencies]
+zipscope-core = { path = "../core" }
+zipscope-testkit = { path = "../testkit" }
+
+[lints]
+workspace = true

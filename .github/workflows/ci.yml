@@ -1,0 +1,76 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  # Runs the checks on a branch without a pull request.
+  workflow_dispatch:
+
+# Principle of least privilege.
+permissions:
+  contents: read
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
+
+jobs:
+  format-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Installs the toolchain from rust-toolchain.toml.
+      - run: rustup toolchain install
+      - uses: jdx/mise-action@v5
+      - run: mise run format:check
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Installs the toolchain from rust-toolchain.toml.
+      - run: rustup toolchain install
+      - uses: jdx/mise-action@v5
+      - run: mise run lint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Installs the toolchain from rust-toolchain.toml.
+      - run: rustup toolchain install
+      - uses: jdx/mise-action@v5
+      - run: mise run test
+        env:
+          # The differential test compares with zipinfo (from unzip).
+          ZIPSCOPE_REQUIRE_ZIPINFO: 1
+
+  # Builds the wasm and the web app, serves the build with the real
+  # `_headers` (Cloudflare Vite plugin), and runs the Playwright tests on
+  # Chromium. Before that, it runs the vitest browser tests on Chromium. A
+  # broken isolation setup fails here.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Installs the toolchain from rust-toolchain.toml.
+      - run: rustup toolchain install
+      - uses: jdx/mise-action@v5
+      - run: mise run e2e:install
+      - run: mise run test:browser
+      - run: mise run e2e
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-results
+          path: web/test-results
+          retention-days: 7

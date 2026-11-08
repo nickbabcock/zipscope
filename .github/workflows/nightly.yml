@@ -1,0 +1,69 @@
+name: nightly
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+# Principle of least privilege.
+permissions:
+  contents: read
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Builds the wasm and runs the Rust tests with the next Rust release.
+  beta:
+    runs-on: ubuntu-latest
+    env:
+      # Overrides rust-toolchain.toml.
+      RUSTUP_TOOLCHAIN: beta
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install beta --profile minimal --component clippy --target wasm32-unknown-unknown
+      - uses: jdx/mise-action@v5
+      - run: rustc --version
+      - run: mise run build:wasm
+      - run: mise run test:cargo
+
+  # Reports the 100k and 1M listings and the latency of the incremental
+  # sort against the budgets of the bench scripts. The budgets do not gate: only
+  # a wrong listing or a wrong sort order fails this job.
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Installs the toolchain from rust-toolchain.toml.
+      - run: rustup toolchain install
+      - uses: jdx/mise-action@v5
+      - run: mise run e2e:install
+      - run: mise run bench:listing 100000
+      - run: mise run bench:listing 1000000
+      - run: mise run bench:sort 1000000
+
+  # A short fuzz run of the ingest. Fuzzing needs nightly Rust, which only
+  # this job uses.
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Installs the toolchain from rust-toolchain.toml for the corpus.
+      - run: rustup toolchain install
+      - run: rustup toolchain install nightly --profile minimal
+      - uses: jdx/mise-action@v5
+      - run: cargo install cargo-fuzz --locked
+      - run: mise run test:fuzz
+      - run: mise run fuzz 300
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts
+          retention-days: 30

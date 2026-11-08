@@ -1,0 +1,42 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.worker.tsbuildinfo",
+    "lib": ["ES2024", "WebWorker"],
+    "types": [],
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "src/contracts.ts",
+    "src/parse/worker.ts",
+    "src/view/sort.ts",
+    "src/parse/batch.ts",
+    "src/parse/budget.ts",
+    "src/format.ts",
+    "src/parse/loop.ts",
+    "src/parse/memory.ts",
+    "src/memory.ts",
+    "src/parse/publish.ts",
+    "src/parse/reader.ts",
+    "src/read/layout.ts",
+    "src/read/scan.ts",
+    "src/read/extract.ts",
+    "src/read/memory.ts",
+    "src/read/port.ts",
+    "src/read/row-reader.ts",
+    "src/write/encoder.ts",
+    "src/write/lead.ts",
+    "src/write/memory.ts",
+    "src/write/slots.ts",
+    "src/sw.ts",
+    "src/sw-caches.ts",
+    "src/read/worker.ts",
+    "src/store/reader.ts",
+    "browser/*-worker.ts",
+    "browser/yield-types.ts",
+    "browser/reservation-types.ts",
+    "bench/reader/worker.ts",
+    "bench/reader/strategies.ts"
+  ],
+  "exclude": []
+}

@@ -1,0 +1,16 @@
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+}
+
+/* A style such as `display: grid` overrides the browser rule for
+   `hidden`. Hidden pool rows must not cover visible rows. The rule does
+   not apply to `hidden="until-found"`, so find-in-page can show it. */
+[hidden]:where(:not([hidden="until-found"])) {
+  display: none !important;
+}
+
+@stylex;

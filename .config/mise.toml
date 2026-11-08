@@ -1,0 +1,223 @@
+[tools]
+"aqua:pnpm" = { version = "12.16.1" }
+"node" = { version = "24.22.2" }
+"github:wasm-bindgen/wasm-bindgen" = { version = "0.2.129" } # match Cargo.toml
+"github:WebAssembly/binaryen" = { version = "133", version_prefix = "version_", strip_components = 1, bin_path = "bin" }
+# Compiles the C zstd library to wasm. Apple clang has no WebAssembly target,
+# and Windows has no clang by default.
+"github:WebAssembly/wasi-sdk" = { version = "wasi-sdk-29", strip_components = 1, bin_path = "bin", os = [
+  "macos",
+  "windows",
+] }
+
+[tasks.pnpm-install]
+run = "pnpm install --frozen-lockfile"
+sources = ["pnpm-lock.yaml", "package.json", "web/package.json"]
+outputs = { auto = true }
+hide = true
+
+[tasks."build:wasm:cargo"]
+description = "Compile the core, read and write crates for wasm32 (SIMD on)"
+# The write crate uses the read crate without its wasm exports and its
+# allocator (feature `module`). Cargo unifies the features of one build,
+# so the write wasm has its own cargo call.
+run = [
+  "cargo build --locked --release --target wasm32-unknown-unknown -p zipscope-core -p zipscope-read",
+  "cargo build --locked --release --target wasm32-unknown-unknown -p zipscope-write",
+]
+
+[tasks."build:wasm:bindgen"]
+description = "Generate the JS bindings for the core, read and write wasm"
+depends = ["build:wasm:cargo"]
+run = [
+  "wasm-bindgen --target web ./target/wasm32-unknown-unknown/release/zipscope_core.wasm --out-dir ./web/src/wasm",
+  "wasm-bindgen --target web ./target/wasm32-unknown-unknown/release/zipscope_read.wasm --out-dir ./web/src/wasm",
+  "wasm-bindgen --target web ./target/wasm32-unknown-unknown/release/zipscope_write.wasm --out-dir ./web/src/wasm",
+]
+
+[tasks."build:wasm:opt"]
+description = "Optimize the core, read and write wasm with wasm-opt"
+depends = ["build:wasm:bindgen"]
+run = [
+  "wasm-opt -O3 --enable-simd --enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext --enable-mutable-globals --enable-reference-types --enable-multivalue ./web/src/wasm/zipscope_core_bg.wasm -o ./web/src/wasm/zipscope_core_bg.wasm",
+  "wasm-opt -O3 --enable-simd --enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext --enable-mutable-globals --enable-reference-types --enable-multivalue ./web/src/wasm/zipscope_read_bg.wasm -o ./web/src/wasm/zipscope_read_bg.wasm",
+  "wasm-opt -O3 --enable-simd --enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext --enable-mutable-globals --enable-reference-types --enable-multivalue ./web/src/wasm/zipscope_write_bg.wasm -o ./web/src/wasm/zipscope_write_bg.wasm",
+]
+
+[tasks."build:wasm"]
+description = "Build the wasm bundles (cargo, wasm-bindgen, wasm-opt)"
+depends = ["build:wasm:opt"]
+
+[tasks."build:web"]
+description = "Build the web app into web/dist"
+depends = ["pnpm-install", "build:wasm"]
+dir = "web"
+run = "pnpm run build"
+
+[tasks.build]
+description = "Build the wasm and the web app"
+depends = ["build:web"]
+
+# The production origin is here, and only here. It gives the canonical link,
+# og:url and og:image. A build with no ZIPSCOPE_ORIGIN leaves these tags out.
+[tasks."build:production"]
+description = "Build the wasm and the web app for production, with the production origin"
+depends = ["pnpm-install", "build:wasm"]
+dir = "web"
+env = { ZIPSCOPE_ORIGIN = "https://zip.nickb.dev" }
+run = "pnpm run build"
+
+[tasks.dev]
+description = "Run the Vite development server"
+depends = ["pnpm-install", "build:wasm"]
+dir = "web"
+run = "pnpm run dev"
+
+[tasks.preview]
+description = "Serve web/dist with the headers from _headers"
+depends = ["build"]
+dir = "web"
+run = "pnpm run preview"
+
+[tasks."check:preview"]
+description = "Check the served headers, isolation, a small listing, the folder tree and the one-entry pointer check in Chromium"
+depends = ["build", "gen:archive 2000"]
+dir = "web"
+run = "pnpm exec playwright test --project=chromium isolation.spec.ts listing.spec.ts one-entry.spec.ts tree.spec.ts"
+
+[tasks."gen:archive"]
+description = "Generate an archive of empty entries and its name manifest in target/archives"
+usage = 'arg "[entries]" default="100000" help="Number of entries"'
+run = "cargo run --locked --release -q -p zipscope-core --example generate -- ${usage_entries} target/archives/${usage_entries}.zip"
+
+[tasks."bench:listing"]
+description = "Measure an archive listing in headless Chromium against the budgets"
+usage = 'arg "[entries]" default="100000" help="Number of entries"'
+depends = ["build", "gen:archive {{usage.entries}}"]
+dir = "web"
+run = "node scripts/bench-listing.ts ../target/archives/${usage_entries}.zip"
+
+[tasks."bench:extract"]
+description = "Measure the reads, bytes and time per row of an extraction in headless Chromium"
+usage = 'arg "[entries]" default="100000" help="Number of entries"'
+depends = ["build"]
+dir = "web"
+run = "node scripts/bench-extract.ts --dir ../target/bench-extract --label current --rows ${usage_entries}"
+
+[tasks."bench:remux"]
+description = "Measure the reads, the time and the output of a zstd copy, to the save picker and to the download, in headless Chromium"
+usage = 'arg "[entries]" default="100000" help="Number of entries"'
+depends = ["build"]
+dir = "web"
+run = "node scripts/bench-extract.ts --dir ../target/bench-extract --label current --rows ${usage_entries} --remux --verify"
+
+[tasks."bench:sort"]
+description = "Measure view-request latency during an incremental name sort of a shuffled archive in headless Chromium"
+usage = 'arg "[entries]" default="1000000" help="Number of entries"'
+depends = ["build"]
+dir = "web"
+run = [
+  "cargo run --locked --release -q -p zipscope-core --example generate -- ${usage_entries} ../target/archives/${usage_entries}-shuffled.zip --shuffle",
+  "cargo run --locked --release -q -p zipscope-core --example generate -- ${usage_entries} ../target/archives/${usage_entries}-flat.zip --shuffle --flat",
+  "cargo run --locked --release -q -p zipscope-core --example generate -- ${usage_entries} ../target/archives/${usage_entries}-flat-letters.zip --shuffle --flat --letters",
+  "mise exec -- node scripts/bench-sort.ts ../target/archives/${usage_entries}-shuffled.zip --flat ../target/archives/${usage_entries}-flat.zip --flat ../target/archives/${usage_entries}-flat-letters.zip",
+]
+
+[tasks."test:cargo"]
+description = "Run the Rust tests"
+run = "cargo test --locked --workspace"
+
+[tasks."test:web"]
+description = "Run the vitest tests"
+# The Node tests of the listing read the corpus.
+depends = ["pnpm-install", "build:wasm", "gen:corpus"]
+dir = "web"
+run = "pnpm run test"
+
+[tasks."test:browser"]
+description = "Run the vitest browser tests of the worker code on Chromium"
+depends = ["pnpm-install", "gen:corpus"]
+dir = "web"
+run = "pnpm run test:browser"
+
+[tasks.test]
+description = "Run the Rust and vitest tests"
+depends = ["test:cargo", "test:web"]
+
+[tasks.typecheck]
+description = "Type check the web code"
+depends = ["pnpm-install", "build:wasm:bindgen"]
+run = "pnpm run typecheck"
+
+[tasks.lint]
+description = "Lint the Rust and web code (clippy, oxlint, tsc)"
+depends = ["pnpm-install", "build:wasm:bindgen"]
+# The last step fails when a tracked file names a ticket, an audit, a review
+# round, a chore or an owner decision. Give the reason in plain words.
+run = [
+  "cargo clippy --locked --all-targets --workspace -- -D warnings",
+  "cargo clippy --locked --target wasm32-unknown-unknown -p zipscope-core -p zipscope-read -p zipscope-heap -- -D warnings",
+  "cargo clippy --locked --target wasm32-unknown-unknown -p zipscope-write -- -D warnings",
+  "pnpm run lint --deny-warnings",
+  "pnpm run typecheck",
+  '! git grep -nIE "[Tt]ickets?\b|[Aa]udit (chore|item|round)|design audit|ADAPTED|[Rr]eview (round|r[0-9])|\bchores?\b|[Oo]wner (decision|rule)|later\.md|HANDOFF\.md|hostile[-_][0-9]" -- . ":!.config/mise.toml"',
+]
+
+[tasks.format]
+description = "Format the Rust and web code"
+depends = ["pnpm-install"]
+run = [
+  "cargo fmt --all",
+  "cargo fmt --manifest-path web/bench/reader/Cargo.toml",
+  "pnpm run format",
+]
+
+[tasks."format:check"]
+description = "Check that the Rust and web code is formatted"
+depends = ["pnpm-install"]
+run = [
+  "cargo fmt --all --check",
+  "cargo fmt --manifest-path web/bench/reader/Cargo.toml --check",
+  "pnpm run format:check",
+]
+
+[tasks."gen:corpus"]
+description = "Write the test corpus (rawzip assets, mixed and sparse zip64 archives) to target/corpus"
+run = "cargo run --locked --release -q -p zipscope-testkit -- corpus target/corpus"
+
+[tasks."e2e:install"]
+description = "Install the Playwright Chromium"
+depends = ["pnpm-install"]
+dir = "web"
+# On CI, also install the system libraries of the browsers.
+run = "pnpm exec playwright install ${CI:+--with-deps} chromium"
+
+[tasks.e2e]
+description = "Run the Playwright tests on Chromium against the built site"
+depends = ["build", "gen:corpus", "gen:archive 2000"]
+dir = "web"
+run = "pnpm exec playwright test"
+
+[tasks."test:fuzz"]
+description = "Build the fuzz target and run its checks on the corpus without libFuzzer"
+depends = ["gen:corpus"]
+dir = "fuzz"
+run = ["cargo build --locked --release --bin ingest", "cargo test --locked --release"]
+
+[tasks.fuzz]
+description = "Fuzz the ingest with cargo-fuzz (needs nightly Rust)"
+usage = 'arg "[seconds]" default="60" help="Fuzzing time"'
+depends = ["gen:corpus"]
+dir = "fuzz"
+# The ingest leaks each archive (see `leak_entries` in crates/core/src/ingest.rs), so leak
+# detection is off and fork mode restarts the fuzzer process. The libFuzzer
+# flag `-detect_leaks=0` stops only the check after each input. LeakSanitizer
+# also checks when a fork job exits, so `ASAN_OPTIONS` stops that check too.
+# A crash, a panic or a failed check still fails the run.
+env = { ASAN_OPTIONS = "detect_leaks=0" }
+run = "cargo +nightly fuzz run ingest corpus/ingest ../target/corpus/rawzip -- -max_total_time=${usage_seconds} -max_len=65536 -detect_leaks=0 -fork=2"
+
+[tasks."bench:reader"]
+description = "Compare direct, JS windows, prefetch and the pdx-tools wasm window in Chromium"
+depends = ["pnpm-install", "gen:archive 100000", "gen:archive 1000000"]
+run = "sh web/bench/reader/run.sh"

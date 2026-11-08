@@ -1,0 +1,15 @@
+[package]
+name = "zipscope-marks"
+description = "The rule of the characters of a name that show as a mark, for the Zipscope core and read modules"
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+publish.workspace = true
+version.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

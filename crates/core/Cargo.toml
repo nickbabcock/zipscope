@@ -1,0 +1,25 @@
+[package]
+name = "zipscope-core"
+description = "Archive metadata parser and WebAssembly interface for Zipscope"
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+publish.workspace = true
+version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+foldhash.workspace = true
+memchr.workspace = true
+rawzip.workspace = true
+wasm-bindgen.workspace = true
+zipscope-heap = { path = "../heap" }
+zipscope-layout = { path = "../layout" }
+zipscope-marks = { path = "../marks" }
+
+[lints]
+workspace = true

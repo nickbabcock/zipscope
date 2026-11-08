@@ -1,0 +1,6 @@
+target
+# libFuzzer writes new inputs here. Only the regression inputs are in git.
+corpus/ingest/*
+!corpus/ingest/regression-*
+artifacts
+coverage

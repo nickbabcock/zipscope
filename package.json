@@ -1,0 +1,19 @@
+{
+  "name": "zipscope-root",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "lint": "oxlint",
+    "typecheck": "tsc --build"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "oxfmt": "0.75.0",
+    "oxlint": "1.90.0",
+    "typescript": "catalog:"
+  },
+  "packageManager": "pnpm@12.16.1"
+}

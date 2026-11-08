@@ -1,0 +1,8 @@
+// Cloudflare deploy configuration. Zipscope is assets only: no Worker code.
+// The Cloudflare Vite plugin reads this file. It applies `public/_headers`
+// in build, preview and deploy.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "zipscope",
+  "compatibility_date": "2026-10-01",
+}
