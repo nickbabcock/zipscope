@@ -7,7 +7,8 @@
 // Access API. The download route is first in `fetch`, and the download
 // response has its own headers (see `downloadHeaders`).
 //
-// The app shell, in a production build only: the install puts each file
+// The app shell, in a production build only (not in a preview deploy,
+// see `shellList` in `vite.config.ts`): the install puts each file
 // of the build in the cache of its version (see `shellList` in
 // `vite.config.ts`), and `fetch` answers from the caches first. A cached
 // response keeps the headers of the server (COOP, COEP and the CSP of
@@ -39,9 +40,10 @@ interface Shell {
 }
 
 /** The build puts the shell in place of this text. The development server
- *  has no shell, so there this worker only streams downloads. */
+ *  and a preview deploy (`null`) have no shell, so there this worker only
+ *  streams downloads. */
 const shell: Shell | undefined = import.meta.env.PROD
-  ? (JSON.parse("__ZIPSCOPE_SHELL__") as Shell)
+  ? ((JSON.parse("__ZIPSCOPE_SHELL__") as Shell | null) ?? undefined)
   : undefined;
 const CACHE = `${CACHE_PREFIX}${shell?.version ?? "dev"}`;
 

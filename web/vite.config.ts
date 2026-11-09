@@ -155,6 +155,10 @@ const SHELL_PUBLIC = [
  * plugin puts both in `sw.js` in place of the string `__ZIPSCOPE_SHELL__`.
  * Thus a change to any file of the shell gives a new `sw.js`, and the
  * browser installs the new version.
+ *
+ * With `ZIPSCOPE_PREVIEW=1` (the preview deploy of a pull request), the
+ * worker gets no shell: it caches nothing, so each load of a preview shows
+ * the latest push. The worker still streams downloads.
  */
 function shellList(): Plugin {
   return {
@@ -172,7 +176,10 @@ function shellList(): Plugin {
         hash.update(`${file}\n`);
         hash.update(readFileSync(path.join(dir, file === "/" ? "index.html" : file.slice(1))));
       }
-      const shell = { version: hash.digest("hex").slice(0, 16), files };
+      const shell =
+        process.env.ZIPSCOPE_PREVIEW === "1"
+          ? null
+          : { version: hash.digest("hex").slice(0, 16), files };
       const worker = path.join(dir, "sw.js");
       // The minifier can put the text in any kind of quotes.
       const parts = readFileSync(worker, "utf8").split(/(["'`])__ZIPSCOPE_SHELL__\1/);
