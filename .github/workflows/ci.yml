@@ -74,3 +74,55 @@ jobs:
           name: playwright-results
           path: web/test-results
           retention-days: 7
+
+  # Deploys to Cloudflare after all checks pass (see `web/wrangler.jsonc`).
+  # A push to main deploys production. A pull request from a branch of this
+  # repository uploads a version with the preview alias `pr-<number>`, and
+  # production does not change. A pull request from a fork, or from
+  # Dependabot, gets no secrets, so it gets no preview. Do not change this to
+  # `pull_request_target`: that runs the code of the fork with the token.
+  deploy:
+    needs: [format-check, lint, test, build]
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]')
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event_name == 'push' && 'production' || 'preview' }}
+      url: ${{ steps.production.outputs.url || steps.preview.outputs.url }}
+    # One deploy at a time for each target. A new push to a pull request
+    # cancels its older preview. A production deploy always runs to its end.
+    concurrency:
+      group: deploy-${{ github.event_name == 'push' && 'production' || github.event.pull_request.number }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Installs the toolchain from rust-toolchain.toml.
+      - run: rustup toolchain install
+      - uses: jdx/mise-action@v5
+      - id: production
+        if: github.event_name == 'push'
+        working-directory: web
+        run: |
+          mise run build:production
+          pnpm exec wrangler deploy --message "$GITHUB_SHA"
+          echo "url=https://zip.nickb.dev" >> "$GITHUB_OUTPUT"
+      # The preview build has no origin, so its page has a noindex tag.
+      - id: preview
+        if: github.event_name == 'pull_request'
+        working-directory: web
+        env:
+          ALIAS: pr-${{ github.event.pull_request.number }}
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/wrangler-output.json
+        run: |
+          mise run build
+          pnpm exec wrangler versions upload --preview-alias "$ALIAS" --message "$GITHUB_SHA"
+          url=$(jq -r 'select(.type == "version-upload") | .preview_alias_url' "$WRANGLER_OUTPUT_FILE_PATH")
+          echo "url=$url" >> "$GITHUB_OUTPUT"

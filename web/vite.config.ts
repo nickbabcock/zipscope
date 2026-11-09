@@ -71,7 +71,8 @@ function buildSha(): string {
  * Puts the static front door in `index.html`, around the root element, so
  * the served page has it before any script runs. With `ZIPSCOPE_ORIGIN`, it
  * also adds the three head tags that need the production origin. Without it,
- * it leaves them out. `mise run build:production` gives the value.
+ * it adds a `noindex` tag, so a preview deploy stays out of search results.
+ * `mise run build:production` gives the value.
  */
 function staticDoor(): Plugin {
   return {
@@ -82,7 +83,7 @@ function staticDoor(): Plugin {
         ...tag,
         injectTo: "head" as const,
       }));
-      return tags.length === 0 ? body : { html: body, tags };
+      return { html: body, tags };
     },
   };
 }

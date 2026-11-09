@@ -89,9 +89,10 @@ test("the served HTML has the hidden h1 first and each question as an h2", () =>
   }
 });
 
-test("the origin gives three head tags, and no origin gives none", () => {
-  expect(originTags(undefined)).toEqual([]);
-  expect(originTags("")).toEqual([]);
+test("the origin gives three head tags, and no origin gives only noindex", () => {
+  const noindex = [{ tag: "meta", attrs: { name: "robots", content: "noindex" } }];
+  expect(originTags(undefined)).toEqual(noindex);
+  expect(originTags("")).toEqual(noindex);
   expect(originTags("https://zip.nickb.dev/")).toEqual([
     { tag: "link", attrs: { rel: "canonical", href: "https://zip.nickb.dev/" } },
     { tag: "meta", attrs: { property: "og:url", content: "https://zip.nickb.dev/" } },

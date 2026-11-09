@@ -142,7 +142,8 @@ test("the served HTML has the questions, the answers and the head tags", async (
   expect(html).toContain('property="og:title"');
   expect(html).toContain('name="twitter:card"');
   expect(html).toContain('rel="icon"');
-  // No origin in this build: these tags stay out.
+  // No origin in this build: these tags stay out, and the page is not indexed.
+  expect(html).toContain('<meta name="robots" content="noindex"');
   expect(html).not.toContain('rel="canonical"');
   expect(html).not.toContain("og:url");
   expect(html).not.toContain("og:image");

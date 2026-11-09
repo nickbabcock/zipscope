@@ -125,13 +125,16 @@ function rest(): string {
   ].join("");
 }
 
-/** Returns the head tags that need the production origin. With no origin, it
- *  returns no tags. */
+/** Returns the head tags that need the production origin. With no origin,
+ *  the build is a preview or a local build, so it returns only a tag that
+ *  keeps search engines from indexing the page. */
 export function originTags(
   origin: string | undefined,
 ): { tag: string; attrs: Record<string, string> }[] {
   const base = origin?.replace(/\/+$/, "");
-  if (base === undefined || base === "") return [];
+  if (base === undefined || base === "") {
+    return [{ tag: "meta", attrs: { name: "robots", content: "noindex" } }];
+  }
   return [
     { tag: "link", attrs: { rel: "canonical", href: `${base}/` } },
     { tag: "meta", attrs: { property: "og:url", content: `${base}/` } },
