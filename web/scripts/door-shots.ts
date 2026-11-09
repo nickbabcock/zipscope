@@ -48,9 +48,14 @@ async function desktop(browser: Browser, url: string, scheme: "light" | "dark"):
     reducedMotion: "reduce",
   });
   await page.goto(url);
-  // The picture opens the sample at the preview of the space hog.
+  // The capture shows the space hog in the largest files, with its preview.
   await page.locator("#door-shot-button").click();
   await settle(page);
+  await page
+    .locator('#list-viewport [role=row] [data-part="label"]', { hasText: "debug/demo-app.debug" })
+    .first()
+    .click();
+  await page.keyboard.press("Enter");
   await page.locator("#preview-pane").waitFor();
   await page.waitForTimeout(1000);
   // The capture has no focus ring: the selected row shows the selection.
@@ -70,7 +75,7 @@ async function previewShot(browser: Browser, url: string, scheme: "light" | "dar
     reducedMotion: "reduce",
   });
   await page.goto(url);
-  await page.locator("#sample-button").click();
+  await page.locator("#door-shot-button").click();
   await settle(page);
   // Go down the folders to the picture of the sample. A folder row can
   // name a chain of folders ("icons/hicolor/").
@@ -118,7 +123,7 @@ async function phone(browser: Browser, url: string, scheme: "light" | "dark"): P
   });
   const page = await context.newPage();
   await page.goto(url);
-  await page.locator("#sample-button").click();
+  await page.locator("#door-shot-button").click();
   await settle(page);
   const file = path.join(work, `mobile-${scheme}.png`);
   await page.screenshot({ path: file });

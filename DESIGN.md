@@ -159,7 +159,9 @@ characters.
   the tool starts in the first view below them.
 - The picture is a capture of the real tool on the sample archive, in the
   theme of the visitor (`mise run gen:door-shots`). It is level: no tilt, no
-  browser frame. Selecting it opens the sample at the same place.
+  browser frame. It is the one way into the sample: its caption, above it
+  and in the first view, says so, and selecting it opens the root listing
+  of the sample.
 - Five bands follow: speed, local, preview, health, save. Each band has a
   datum on the left at display scale and its claim on the right. A datum is
   a measured value or a real value of the sample. The preview band shows a
@@ -167,9 +169,7 @@ characters.
   add a claim that a test or a benchmark does not support.
 - The page has no questions section. A fact that a visitor needs goes in
   the band that it supports, as one short line.
-- The page links the sample one time: "Try a sample archive" (the picture
-  of the tool opens the same sample). The bands have no links, and the page
-  does not link the source code.
+- The bands have no links, and the page does not link the source code.
 - The page has no cards, no icons for each band, no section numbers and no
   accordions.
 - The front door has no top bar: the poster word mark is the header. The

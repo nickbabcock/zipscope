@@ -151,7 +151,7 @@ const named = (page: Page, label: string) =>
   });
 
 async function sample(page: Page): Promise<void> {
-  await page.locator("#sample-button").click();
+  await page.locator("#door-shot-button").click();
   const result = await waitForOutcome(page);
   if (result.outcome !== "complete") throw new Error(`sample: ${result.status}`);
   await page.locator("#health-strip").waitFor();

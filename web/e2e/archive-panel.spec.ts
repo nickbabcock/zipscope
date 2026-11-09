@@ -426,7 +426,7 @@ test("a hostile archive with 65,535 methods and gaps keeps the panel small and f
 
 test("the Archive panel of the sample has the Demo marker", async ({ page }) => {
   await page.goto("/");
-  await page.locator("#sample-button").click();
+  await page.locator("#door-shot-button").click();
   await waitForOutcome(page);
   await page.locator("#tree-viewport [role=treeitem]:not([hidden])").first().click();
   // The DEMO tag shows

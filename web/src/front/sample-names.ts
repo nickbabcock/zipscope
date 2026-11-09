@@ -12,7 +12,6 @@ export const SAMPLE_PICTURE = `${SAMPLE_ROOT}/share/demo-app/icons/hicolor/scala
 /** The bytes after the end record. */
 export const SAMPLE_TRAILER_BYTES = 3 * 1024;
 
-/** The control that starts the sample: the sample button, or the picture of
- *  the tool ("shot"), which opens the preview of the space hog, as the
- *  picture shows it. */
-export type SampleUse = "sample" | "shot";
+/** The control that starts the sample: the picture of the tool on the first
+ *  door, or the reopen button of the demo. Both open the root listing. */
+export type SampleUse = "sample";

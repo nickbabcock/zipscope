@@ -17,9 +17,7 @@ export const front = {
   /** The line that the script adds after the preload. */
   test: "Load this page, disconnect, then open a file. Zipscope still works.",
   open: "Open a file",
-  sample: "Try a sample archive",
   /** The first part of `sample`. Below 380 px only this part shows. */
-  sampleShort: "Try a sample",
   /** The accessible name of the picture of the tool. It opens the sample. */
   shotName: "Open the sample archive in Zipscope",
   /** The map margin while the device makes the sample. */
@@ -82,7 +80,7 @@ export const door = {
   opens:
     "Opens any zip file, such as a jar, apk, whl, ipa, vsix or docx file. It does not open 7z, rar or tar files.",
   /** The line below the picture of the tool. */
-  shotLabel: "The sample archive in Zipscope. Select the picture to open it.",
+  shotLabel: "The sample archive in Zipscope. Select the picture to explore it.",
   /** The text equivalent of the picture of the tool. */
   shotAlt:
     "Zipscope with the sample archive open: a folder tree with sizes, a table of the largest files with demo-app.debug selected at 12.0 MiB, a warning that one entry has the same name as another entry, and a hex preview of the selected file.",

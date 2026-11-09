@@ -44,7 +44,6 @@ import { ExtractSlot } from "./ExtractSlot";
 import { RemuxSlot } from "./RemuxSlot";
 import type { ExtractRequest } from "./ExtractSlot";
 import { browserStorage, fitWidth, loadWidth, saveWidth } from "./preview-width";
-import { SAMPLE_HOG } from "../front/sample-names";
 
 /** True when `folder` is below `ancestor` in the folder table. */
 function isBelow(session: ArchiveSession, folder: number, ancestor: number): boolean {
@@ -301,22 +300,12 @@ export function Workspace(props: WorkspaceProps) {
   /** The selected file of the table, or undefined when a folder or no
    *  row is selected. The Preview button opens it. */
   let selection: PreviewTarget | undefined;
-  /** True until the picture of the tool opened the preview of the space hog. */
-  let revealPreview = view.reveal === "shot";
   // The preview follows the selected entry while it is open. In the
   // medium and wide layouts, that replaces the history entry. A folder
   // selection keeps the last file in the preview.
   const onSelectEntry = (name: string | undefined, row: number | undefined) => {
     selection = name === undefined || row === undefined ? undefined : { name, row };
     if (name === undefined || row === undefined) return;
-    // The picture of the tool: the first selection of the space hog opens
-    // its preview beside the table. The narrow layout keeps the
-    // table, because there the preview covers it.
-    if (revealPreview && name === SAMPLE_HOG) {
-      revealPreview = false;
-      if (!narrow()) openPreview(name, row);
-      return;
-    }
     if (popup !== undefined) {
       setPopTarget({ row, name });
     } else if (previewOpen() && !narrow()) {
@@ -606,7 +595,6 @@ export function Workspace(props: WorkspaceProps) {
             firstRowReady={(set) => view.firstRowReady(nav.query(), set)}
             onFirstRowDone={view.dropFirstRow}
             revealFocus={view.reveal !== undefined}
-            revealFile={view.reveal === "shot" ? SAMPLE_HOG : undefined}
             onEmpty={setListingEmpty}
             onPick={props.onPick}
             onTogglePreview={togglePreview}

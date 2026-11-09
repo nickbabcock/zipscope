@@ -160,29 +160,6 @@ export function FrontDoor(props: FrontDoorProps) {
       styles.named,
     );
 
-  const sampleButton = () => (
-    <button
-      id="sample-button"
-      type="button"
-      aria-busy={props.sampleUse === "sample" ? "true" : undefined}
-      onClick={() => props.onSample("sample")}
-      {...stylex.attrs(
-        controls.button,
-        controls.focusRing,
-        styles.action,
-        props.sampleUse === "sample" && styles.buttonBusy,
-      )}
-    >
-      <Icon name="archive" />
-      <span>
-        {front.sampleShort}
-        <span {...stylex.attrs(styles.sampleRest)}>
-          {front.sample.slice(front.sampleShort.length)}
-        </span>
-      </span>
-    </button>
-  );
-
   /** The recent archives: a label, a list of names and sizes, and a
    *  line that says what the browser keeps. The section stays while the
    *  line about a lost archive shows, so its status region is in the page
@@ -256,15 +233,15 @@ export function FrontDoor(props: FrontDoorProps) {
     },
   );
 
-  /** The picture of the tool on the sample archive. It opens the sample at
-   *  the preview of the space hog, as the picture shows it. */
+  /** The picture of the tool on the sample archive: the way into the
+   *  sample. It opens the root listing of the sample. */
   const shotButton = (picture: Element) => (
     <button
       id="door-shot-button"
       type="button"
       aria-label={front.shotName}
-      aria-busy={props.sampleUse === "shot" ? "true" : undefined}
-      onClick={() => props.onSample("shot")}
+      aria-busy={props.sampleUse === "sample" ? "true" : undefined}
+      onClick={() => props.onSample("sample")}
       {...stylex.attrs(styles.shot, controls.focusRing)}
     >
       {picture}
@@ -281,7 +258,7 @@ export function FrontDoor(props: FrontDoorProps) {
     const fill = (id: string, ...nodes: unknown[]) =>
       staticPage.querySelector(`#${id}`)?.replaceChildren(...(nodes as Node[]));
     runWithOwner(owner, () => {
-      fill("door-buttons", openButton(true, "front-open"), sampleButton());
+      fill("door-buttons", openButton(true, "front-open"));
       fill("door-close-buttons", openButton(true, "close-open"));
       fill("door-recent", recentList());
       const picture = staticPage.querySelector("#door-shot picture");
@@ -401,7 +378,6 @@ export function FrontDoor(props: FrontDoorProps) {
 }
 
 const NARROW = "@media (max-width: 640px)";
-const TINY = "@media (max-width: 379px)";
 const COARSE = "@media (pointer: coarse)";
 
 const styles = stylex.create({
@@ -454,9 +430,6 @@ const styles = stylex.create({
     display: "block",
     padding: 0,
     width: "100%",
-  },
-  sampleRest: {
-    display: { default: "inline", [TINY]: "none" },
   },
   named: {
     maxWidth: "100%",

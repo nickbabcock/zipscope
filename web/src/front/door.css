@@ -294,7 +294,7 @@ html[data-door="unsupported"] #door-h1 {
   color: var(--door-ink-muted);
   font-size: var(--door-small);
   line-height: 20px;
-  margin-top: 8px;
+  margin-bottom: 8px;
 }
 
 /* The same form as the tag of the tool (`DemoTag.tsx`). */

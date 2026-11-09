@@ -108,9 +108,11 @@ function hero(): string {
     // The recent archives (Chromium): directly below the actions, so a
     // returning visitor sees them in the first view. The app draws them.
     `<div id="door-recent"></div>`,
+    // The picture is the way into the sample, so its caption comes first: it
+    // is in the first view, and the bottom of the picture is not.
     `<figure id="door-shot-frame">`,
-    `<div id="door-shot">${picture("tool", door.shotAlt, "mobile", "eager")}</div>`,
     `<figcaption id="door-shot-label"><span class="door-tag">Demo</span> ${copy(door.shotLabel)}</figcaption>`,
+    `<div id="door-shot">${picture("tool", door.shotAlt, "mobile", "eager")}</div>`,
     `</figure>`,
     `<p id="door-opens">${escape(door.opens)}</p>`,
     `</section>`,
