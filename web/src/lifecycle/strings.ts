@@ -23,8 +23,4 @@ export const lifecycle = {
   receiving: "Opening the file from the other tab…",
   /** The window of a file launch while it waits for the file. */
   launching: "Opening the file…",
-  /** The update notice in the map margin. */
-  updateReady: "Update ready, reload when convenient.",
-  /** The control of the update notice. */
-  reload: "Reload",
 } as const;

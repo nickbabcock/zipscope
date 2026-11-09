@@ -1,6 +1,6 @@
 // The installed app: the manifest and its file handler, the app shell cache
-// of the service worker, and the update notice. These tests need the
-// service worker, which the other specs block.
+// of the service worker, and its updates. These tests need the service
+// worker, which the other specs block.
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -29,7 +29,9 @@ const TYPES: Record<string, string> = {
  * Serves the build on a new port (a new origin), with the headers of the
  * `/*` rule of `_headers`. The browser checks `sw.js` for an update in its
  * own process, and Playwright cannot change that request. So this server
- * gives `sw.js` with the version that `next()` sets.
+ * gives `sw.js` with the version that `next()` sets. It puts the mark of
+ * `mark()` (else the version) in the page as a `zipscope-deploy` meta tag,
+ * so a test can change the page with no new version of the worker.
  */
 async function deployServer() {
   const rule = readFileSync(path.join(dist, "_headers"), "utf8")
@@ -47,6 +49,7 @@ async function deployServer() {
       ),
   );
   let version: string | undefined;
+  let pageMark: string | undefined;
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     const file = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
@@ -62,6 +65,14 @@ async function deployServer() {
         body.toString("utf8").replace(/(\\"version\\":\\")[0-9a-f]+/, `$1${version}`),
       );
     }
+    const tag = pageMark ?? version;
+    if (file === "index.html" && tag !== undefined) {
+      body = Buffer.from(
+        body
+          .toString("utf8")
+          .replace("</head>", `<meta name="zipscope-deploy" content="${tag}"></head>`),
+      );
+    }
     response.writeHead(200, {
       ...headers,
       "Cache-Control": "no-cache",
@@ -75,6 +86,10 @@ async function deployServer() {
     /** The next deploy: `sw.js` gets the version `name`. */
     next(name: string) {
       version = name;
+    },
+    /** A change to the page only: `sw.js` stays the same. */
+    mark(name: string) {
+      pageMark = name;
     },
     close: () =>
       new Promise<void>((resolve) => {
@@ -246,7 +261,7 @@ test("offline, the page and every file of the build come from the cache, cross-o
   await expect(page.locator("#front-door")).toHaveAttribute("data-state", "receiving");
 });
 
-test("a new version shows the update notice, and only Reload reloads, only its own tab", async ({
+test("a new version takes over with no reload, and the next load shows it", async ({
   page,
   context,
 }) => {
@@ -266,58 +281,37 @@ test("a new version shows the update notice, and only Reload reloads, only its o
     const mark = () => {
       (window as unknown as { stays?: boolean }).stays = true;
     };
-    await page.evaluate(mark);
     await other.evaluate(mark);
     deploy.next("0123456789abcdef");
     await page.evaluate(async () => {
       await (await navigator.serviceWorker.getRegistration())?.update();
     });
-    await expect(page.locator("#update-notice")).toContainText(lifecycle.updateReady);
-    await expect(other.locator("#update-notice")).toContainText(lifecycle.updateReady);
-    const stays = (tab: Page) =>
-      tab.evaluate(() => (window as unknown as { stays?: boolean }).stays === true);
-    expect(await stays(page)).toBe(true);
-    // The new version waits for the user. Until Reload, both tabs stay
-    // under the old version.
-    const waits = (tab: Page) =>
-      tab.evaluate(
-        async () =>
-          (await navigator.serviceWorker.getRegistration())?.waiting instanceof ServiceWorker,
-      );
-    expect(await waits(page)).toBe(true);
-    expect(await waits(other)).toBe(true);
-
-    // On a narrow screen the sentence of the notice gets only the free
-    // space: the facts of the archive keep their full text, and Reload
-    // stays. `scrollWidth` is rounded, so the check compares the width of
-    // the text with the width of the field, in fractions of a pixel.
-    for (const width of [320, 360]) {
-      await other.setViewportSize({ width, height: 640 });
-      await expect(other.locator("#update-reload")).toBeVisible();
-      for (const id of ["#entries-listed", "#status"]) {
-        const [text, field] = await other.locator(id).evaluate((element) => {
-          const range = document.createRange();
-          range.selectNodeContents(element);
-          return [range.getBoundingClientRect().width, element.getBoundingClientRect().width];
-        });
-        expect(text, `${id} at ${width} px`).toBeLessThanOrEqual(field);
-      }
-    }
-
-    const loaded = page.waitForEvent("load");
-    await page.locator("#update-reload").click();
-    await loaded;
-    expect(await stays(page)).toBe(false);
-    await expect(page.locator("#cross-origin-isolated")).toHaveText("true");
-    await expect(page.locator("#update-notice")).toHaveCount(0);
+    // The new version activates when its shell is in the cache. Nothing
+    // waits, and no tab reloads.
+    const active = (tab: Page) =>
+      tab.evaluate(async () => {
+        const registration = await navigator.serviceWorker.getRegistration();
+        return registration?.waiting === null && registration.installing === null;
+      });
+    await expect
+      .poll(() => cachedPaths(page).then(Object.keys))
+      .toContain("zipscope-shell-0123456789abcdef");
+    await expect.poll(() => active(page)).toBe(true);
     // The other tab keeps its archive. The cache of its version stays, so
     // it can still load the files of its build.
-    expect(await stays(other)).toBe(true);
+    expect(await other.evaluate(() => (window as unknown as { stays?: boolean }).stays)).toBe(true);
     await expect(other.locator("#archive-name")).toHaveText("kept.zip");
-    await expect(other.locator("#update-notice")).toBeVisible();
     expect(Object.keys(await cachedPaths(page)).sort()).toEqual(
       [oldCache, "zipscope-shell-0123456789abcdef"].sort(),
     );
+
+    // The page comes from the network first: the next load shows a change
+    // of the page, also with no new version of the worker. The cache has
+    // the page of the install.
+    deploy.mark("fresh");
+    await page.reload();
+    await expect(page.locator('meta[name="zipscope-deploy"]')).toHaveAttribute("content", "fresh");
+    await expect(page.locator("#cross-origin-isolated")).toHaveText("true");
   } finally {
     await deploy.close();
   }

@@ -26,11 +26,8 @@ jobs:
       # Installs the toolchain from rust-toolchain.toml.
       - run: rustup toolchain install
       - uses: jdx/mise-action@v5
-      # The build has no origin, so its page has a noindex tag. It has no
-      # offline cache, so each load of the preview shows the latest push.
+      # The build has no origin, so its page has a noindex tag.
       - run: mise run build
-        env:
-          ZIPSCOPE_PREVIEW: "1"
       - uses: actions/upload-artifact@v7
         with:
           name: preview-dist

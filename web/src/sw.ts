@@ -7,17 +7,20 @@
 // Access API. The download route is first in `fetch`, and the download
 // response has its own headers (see `downloadHeaders`).
 //
-// The app shell, in a production build only (not in a preview deploy,
-// see `shellList` in `vite.config.ts`): the install puts each file
+// The app shell, in a production build only: the install puts each file
 // of the build in the cache of its version (see `shellList` in
-// `vite.config.ts`), and `fetch` answers from the caches first. A cached
-// response keeps the headers of the server (COOP, COEP and the CSP of
-// `_headers`), so a page from the cache is cross-origin isolated too.
+// `vite.config.ts`). The page itself comes from the network first, so a
+// visit always shows the latest deploy. The cache gives the page when the
+// device is offline, or when the network does not answer in
+// `NETWORK_WAIT_MS`. The other files have a hash in their names, so
+// `fetch` answers them from the caches first. A cached response keeps the
+// headers of the server (COOP, COEP and the CSP of `_headers`), so a page
+// from the cache is cross-origin isolated too.
 //
-// Updates: a new version installs and then waits, and the page shows the
-// update notice. The new version activates when the user chooses Reload
-// in the notice (the `zipscope-skip-waiting` message), or when no tab uses
-// the old version. This worker never reloads a page.
+// Updates: a new version activates as soon as its install puts the shell
+// in its cache. A tab of the old version stays open under the new worker:
+// the cache of the old version stays (see `removeOldCaches`), so the tab
+// can still load the files of its build. This worker never reloads a page.
 //
 // This file has only type imports and `sw-caches.ts`, which only this
 // file imports. Thus it builds to one script, `sw.js` at the root, and
@@ -30,6 +33,8 @@ import { ACTIVATED, CACHE_PREFIX, staleCaches } from "./sw-caches";
 declare const self: ServiceWorkerGlobalScope;
 
 const DOWNLOAD_PATH = "zipscope-download/";
+/** How long the page waits for the network before the cache gives it. */
+const NETWORK_WAIT_MS = 3000;
 /** How long a download URL waits for its message from the page. */
 const WAIT_MS = 10_000;
 
@@ -40,10 +45,9 @@ interface Shell {
 }
 
 /** The build puts the shell in place of this text. The development server
- *  and a preview deploy (`null`) have no shell, so there this worker only
- *  streams downloads. */
+ *  has no shell, so there this worker only streams downloads. */
 const shell: Shell | undefined = import.meta.env.PROD
-  ? ((JSON.parse("__ZIPSCOPE_SHELL__") as Shell | null) ?? undefined)
+  ? (JSON.parse("__ZIPSCOPE_SHELL__") as Shell)
   : undefined;
 const CACHE = `${CACHE_PREFIX}${shell?.version ?? "dev"}`;
 
@@ -59,16 +63,17 @@ const pending = new Map<string, Pending>();
 const waiters = new Map<string, (value: Pending) => void>();
 
 self.addEventListener("install", (event) => {
-  // The first version activates at once. A later version waits for the
-  // user (see the update notice). A failed request fails the install, and
-  // the browser keeps the old version. `no-cache` asks the server, so a
-  // stale copy in the HTTP cache does not go into the cache.
+  // Each version activates when its shell is in the cache. A failed request
+  // fails the install, and the browser keeps the old version. `no-cache`
+  // asks the server, so a stale copy in the HTTP cache does not go into the
+  // cache.
   if (shell === undefined) return;
   const files = shell.files;
   event.waitUntil(
     caches
       .open(CACHE)
-      .then((cache) => cache.addAll(files.map((file) => new Request(file, { cache: "no-cache" })))),
+      .then((cache) => cache.addAll(files.map((file) => new Request(file, { cache: "no-cache" }))))
+      .then(() => self.skipWaiting()),
   );
 });
 
@@ -104,10 +109,7 @@ async function removeOldCaches(): Promise<void> {
 
 self.addEventListener("message", (event) => {
   const data = event.data as { type?: string } | null;
-  if (data?.type === "zipscope-skip-waiting") {
-    // The user chose Reload in the update notice.
-    event.waitUntil(self.skipWaiting());
-  } else if (data?.type === "zipscope-download") {
+  if (data?.type === "zipscope-download") {
     const message = data as DownloadMessage;
     const [port, start] = event.ports;
     if (port === undefined) return;
@@ -231,6 +233,16 @@ async function cached(key: string | Request, request: Request): Promise<Response
   return hit ?? fetch(request);
 }
 
+/** The page from the network. The cache gives it when the network fails,
+ *  or when it does not answer in `NETWORK_WAIT_MS`. A navigation request
+ *  cannot take an abort signal, so a late answer is not used. */
+async function networkFirst(request: Request): Promise<Response> {
+  const network = fetch(request).catch(() => undefined);
+  const late = new Promise<undefined>((resolve) => setTimeout(resolve, NETWORK_WAIT_MS));
+  const response = await Promise.race([network, late]);
+  return response ?? cached("/", request);
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
@@ -256,7 +268,7 @@ self.addEventListener("fetch", (event) => {
   if (request.mode === "navigate") {
     // The app has one page. The query (for example the mark of a file
     // launch) does not change it. Other paths go to the network.
-    if (url.pathname === "/") event.respondWith(cached("/", request));
+    if (url.pathname === "/") event.respondWith(networkFirst(request));
     return;
   }
   event.respondWith(cached(request, request));

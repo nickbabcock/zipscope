@@ -191,9 +191,11 @@ characters.
 - The map margin gives the archive name, the file size, the number of
   entries and the parse progress. It shows the store memory only while it
   matters.
-- It says when the device is offline and the app still works, and when an
-  update is ready. It is quiet: no banner, no dialog, no motion. The page
-  never reloads on its own.
+- It says when the device is offline and the app still works. It is quiet:
+  no banner, no dialog, no motion.
+- A new deploy shows on the next load, with no notice: the page comes from
+  the network first, and from the cache only when offline. The page never
+  reloads on its own.
 
 ## Do
 

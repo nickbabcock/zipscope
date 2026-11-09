@@ -26,7 +26,6 @@ import { openHandoffTab, takeHandoffId } from "./lifecycle/address";
 import { LAUNCH_WAIT_MS, takeLaunch, watchLaunches } from "./lifecycle/launch";
 import type { LaunchQueue } from "./lifecycle/launch";
 import type { RecentArchive } from "./lifecycle/remember";
-import { applyUpdate, watchUpdate } from "./lifecycle/update";
 import { loadHandoff, loadOpenChoice, loadRemember } from "./lifecycle/load";
 import { droppedFile, pickFile, plainFile, takeKeptDrop } from "./lifecycle/pick";
 import type { Incoming } from "./lifecycle/pick";
@@ -86,8 +85,6 @@ export function App() {
   /** True when a file launch opened this page. The file comes later. */
   const launched = takeLaunch(location, history);
   const [receiving, setReceiving] = createSignal(handoff !== undefined || launched);
-  /** The registration of the service worker when a new version waits. */
-  const [update, setUpdate] = createSignal<ServiceWorkerRegistration>();
   /** A file that came while an archive is open. The user chooses to
    *  replace the archive or to open the file in a new tab. */
   const [offered, setOffered] = createSignal<Incoming>();
@@ -110,7 +107,7 @@ export function App() {
 
   /**
    * A production build registers the service worker: it caches the app
-   * shell and shows the update notice. The install loads the whole shell,
+   * shell for offline use. The install loads the whole shell,
    * so the registration comes after the first work of the page (the
    * preload of the front door, or the parse of the first archive). Then
    * the install does not slow the first listing. The development server
@@ -121,15 +118,9 @@ export function App() {
     const container = (navigator as { serviceWorker?: ServiceWorkerContainer }).serviceWorker;
     if (registered || !import.meta.env.PROD || container === undefined) return;
     registered = true;
-    void watchUpdate(container, "/sw.js", setUpdate);
-  };
-
-  /** Reload of the update notice: the new version activates, and then
-   *  this tab reloads. */
-  const reloadForUpdate = () => {
-    const registration = update();
-    if (registration === undefined) return;
-    void applyUpdate(registration, navigator.serviceWorker, () => location.reload());
+    // A failed registration (a private window in some browsers) leaves the
+    // app without offline use. It still works.
+    container.register("/sw.js").catch(() => {});
   };
 
   // The front door lists the kept handles, and an idle task removes the
@@ -548,7 +539,6 @@ export function App() {
         phase={view()?.phase() ?? OPENING}
         onCancel={() => active?.cancel()}
         narrow={narrow()}
-        onUpdate={update() === undefined ? undefined : reloadForUpdate}
       />
       <Show when={offered()}>
         {(file) => {
