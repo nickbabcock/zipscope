@@ -110,7 +110,7 @@ export const door = {
     figure: "100\u00a0ms",
     unit: "to the first rows, for a 100\u00a0GB file or 1,000,000 entries",
     heading: "Size does not slow it down.",
-    body: "Zipscope reads only the index at the end of the file, not the data in it. A 100\u00a0GB file opens as fast as a small one. With 1,000,000 entries, you can scroll, sort and search while the rest of the list fills in.",
+    body: "A 100\u00a0GB file opens as fast as a small one. With 1,000,000 entries, you can scroll, sort and search while the rest of the list fills in.",
     note: "Measured in Chromium on a desktop computer: about 70\u00a0ms for a 100\u00a0GB file, and about 100\u00a0ms to the first rows and 1.0\u00a0s to the full list for 1,000,000 entries.",
   },
   local: {
@@ -123,7 +123,7 @@ export const door = {
   },
   preview: {
     heading: "Look inside before you extract.",
-    body: "Select a file to see its picture, its text or its bytes. Zipscope reads only that file from the archive, and it writes nothing to your disk.",
+    body: "Select a file to see its picture, its text or its bytes. Zipscope writes nothing to your disk.",
     /** The text equivalent of the picture of the preview. */
     shotAlt:
       "The preview of Zipscope with the icon of the sample app open: a blue tile with three white layers, beside the list of its folder.",
