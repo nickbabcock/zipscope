@@ -1,0 +1,37 @@
+# Builds the web app of a pull request for a preview. This workflow runs the
+# code of the pull request, also from a fork, so it has no secrets and a
+# read-only token. The `preview` workflow uploads the build to Cloudflare.
+name: preview-build
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+# A new push to a pull request cancels its older build, so an older build can
+# never finish last and replace a newer preview.
+concurrency:
+  group: preview-build-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Dependabot changes only dependencies, so a preview shows nothing new.
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Installs the toolchain from rust-toolchain.toml.
+      - run: rustup toolchain install
+      - uses: jdx/mise-action@v5
+      # The build has no origin, so its page has a noindex tag.
+      - run: mise run build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: preview-dist
+          path: web/dist
+          if-no-files-found: error
+          # An approval of a fork preview can come days after the build.
+          retention-days: 7

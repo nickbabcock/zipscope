@@ -1,0 +1,136 @@
+# Uploads the build of a pull request to Cloudflare as a Worker Preview named
+# `pr-<number>`, and puts the URL in a comment. A Preview is not a version of
+# the production Worker, so it cannot become production. `preview-close`
+# deletes it when the pull request closes.
+#
+# GitHub runs this workflow from the default branch, with secrets, after
+# `preview-build` completes. The pull request controls all of that build, so
+# this job uses it only as data: it never runs code of the pull request,
+# never reads the `wrangler.json` of the build, and never takes a value from
+# the build. The Worker name, the compatibility date and the code of this job
+# come from the default branch. The number of the pull request comes from
+# the API. A Preview has only static assets, and production does not change.
+#
+# A pull request from a branch of this repository uses the `preview`
+# environment. A pull request from a fork uses `preview-fork`, which needs
+# the approval of a maintainer before the job gets the token. Both
+# environments accept only the default branch, so no job of a pull request
+# can get the token. An approval publishes any static files that the fork
+# chose to build, also files that its build downloaded, until the pull
+# request closes. The diff does not limit them.
+name: preview
+run-name: >-
+  preview ${{ github.event.workflow_run.head_repository.full_name }}:${{
+  github.event.workflow_run.head_branch }} ${{ github.event.workflow_run.head_sha }}
+on:
+  workflow_run:
+    workflows: [preview-build]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  upload:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.actor.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      # Downloads the artifact of the `preview-build` run.
+      actions: read
+      contents: read
+      # Writes the comment with the URL.
+      pull-requests: write
+    environment:
+      name: ${{ github.event.workflow_run.head_repository.full_name == github.repository && 'preview' || 'preview-fork' }}
+    # A newer build of the same pull request cancels an older upload.
+    concurrency:
+      group: preview-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
+      cancel-in-progress: true
+    env:
+      REPO: ${{ github.repository }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+      HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+      # The assets directory of `web/wrangler.jsonc`. It is not in the
+      # repository, so the files cannot replace a file of the checkout.
+      DIST: ${{ github.workspace }}/web/dist
+    steps:
+      # The default branch. The code of the pull request is not checked out.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@v5
+      # Wrangler from the lockfile of the default branch.
+      - run: mise run pnpm-install
+      # The one open pull request whose head is the commit that was built,
+      # on the repository and the branch of the run.
+      - id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          numbers=$(gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" \
+            --jq '.[] | select(.head.sha == env.HEAD_SHA and .head.repo.full_name == env.HEAD_REPO and .head.ref == env.HEAD_BRANCH) | .number')
+          if [ "$(printf '%s' "$numbers" | grep -c .)" != 1 ]; then
+            echo "Expected one open pull request with the head $HEAD_SHA, found: $numbers"
+            exit 1
+          fi
+          echo "number=$numbers" >> "$GITHUB_OUTPUT"
+      # gh writes no symbolic links and skips paths that escape the
+      # directory. The checks below do not depend on that: a link could
+      # publish a file of the runner, and a strange file name could write
+      # workflow commands into the log of wrangler.
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "$RUN_ID" --repo "$REPO" --name preview-dist --dir "$DIST"
+          rm -f "$DIST/wrangler.json"
+          if [ -n "$(find "$DIST" ! -type f ! -type d -print -quit)" ]; then
+            echo "The build has a file that is not a regular file or a directory."
+            exit 1
+          fi
+          if [ -n "$(find "$DIST" -name '*[!A-Za-z0-9._@+-]*' -print -quit)" ]; then
+            echo "The build has a file name with a character that is not permitted."
+            exit 1
+          fi
+      # The explicit configuration of the default branch, so wrangler never
+      # reads a configuration that the build wrote, and not the base config of
+      # the dashboard. `--env-file /dev/null` stops wrangler from reading a
+      # `.env` file.
+      - id: upload
+        working-directory: web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          NAME: pr-${{ steps.pr.outputs.number }}
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/wrangler-output.json
+        run: |
+          pnpm exec wrangler preview --config wrangler.jsonc --env-file /dev/null \
+            --ignore-base-config --name "$NAME" --message "Preview of $NAME at $HEAD_SHA"
+          url=$(jq -r 'select(.type == "preview") | (.preview_urls // []) | sort | first // empty' "$WRANGLER_OUTPUT_FILE_PATH")
+          if [ -z "$url" ]; then
+            echo "Wrangler did not give a preview URL."
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      # When the pull request closed during the upload, `preview-close` found
+      # no Preview to delete, so this step deletes it.
+      - working-directory: web
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          NUMBER: ${{ steps.pr.outputs.number }}
+          NAME: pr-${{ steps.pr.outputs.number }}
+          URL: ${{ steps.upload.outputs.url }}
+        run: |
+          if [ "$(gh api "repos/$REPO/pulls/$NUMBER" --jq .state)" != open ]; then
+            pnpm exec wrangler preview delete --config wrangler.jsonc --env-file /dev/null \
+              --ignore-base-config --skip-confirmation --name "$NAME"
+            exit 0
+          fi
+          gh pr comment "$NUMBER" --repo "$REPO" --edit-last --create-if-none \
+            --body "Preview of $HEAD_SHA: $URL"

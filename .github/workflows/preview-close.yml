@@ -1,0 +1,66 @@
+# Deletes the Worker Preview of a pull request when the pull request closes.
+#
+# `pull_request_target` runs this workflow from the default branch, with
+# secrets, also for a pull request from a fork. That is safe here only because
+# the job never checks out or runs code of the pull request: it uses only the
+# number of the pull request. Keep it that way.
+name: preview-close
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions: {}
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Updates the comment with the URL.
+      pull-requests: write
+    environment: preview
+    env:
+      NAME: pr-${{ github.event.pull_request.number }}
+      NUMBER: ${{ github.event.pull_request.number }}
+      REPO: ${{ github.repository }}
+    steps:
+      # The default branch. The code of the pull request is not checked out.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: jdx/mise-action@v5
+      - run: mise run pnpm-install
+      # A fork preview that was not approved does not exist. Any other
+      # failure fails the job, so a Preview cannot stay online unseen.
+      - id: delete
+        working-directory: web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          # The `name` of `web/wrangler.jsonc`.
+          WORKER: zipscope
+        run: |
+          status=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/workers/$WORKER/previews/$NAME")
+          case "$status" in
+            404)
+              echo "No Preview $NAME exists."
+              ;;
+            200)
+              pnpm exec wrangler preview delete --config wrangler.jsonc --env-file /dev/null \
+                --ignore-base-config --skip-confirmation --name "$NAME"
+              echo "deleted=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "The Cloudflare API gave the status $status for the Preview $NAME."
+              exit 1
+              ;;
+          esac
+      - if: steps.delete.outputs.deleted == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment "$NUMBER" --repo "$REPO" --edit-last --create-if-none \
+            --body "The preview of this pull request is deleted."

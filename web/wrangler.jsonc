@@ -2,10 +2,11 @@
 // The Cloudflare Vite plugin reads this file. It applies `public/_headers`
 // in build, preview and deploy.
 //
-// The CI deploy jobs (`.github/workflows/ci.yml`) deploy `main` to the custom
-// domain, and uploads each pull request as a version with a preview alias,
-// `pr-<number>-zipscope.<subdomain>.workers.dev`. Preview URLs need the
-// workers.dev subdomain.
+// The `deploy-production` job of `.github/workflows/ci.yml` deploys `main` to
+// the custom domain. The `preview` workflow uploads each pull request as a
+// Worker Preview named `pr-<number>`, with this file as its configuration and
+// `assets.directory` as the files. The Vite plugin writes its own assets
+// directory for a build, so the other commands do not use that value.
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "zipscope",
@@ -13,4 +14,7 @@
   "routes": [{ "pattern": "zip.nickb.dev", "custom_domain": true }],
   "workers_dev": true,
   "preview_urls": true,
+  "assets": { "directory": "./dist" },
+  // `wrangler preview` needs this block. A Preview gets no bindings.
+  "previews": {},
 }
