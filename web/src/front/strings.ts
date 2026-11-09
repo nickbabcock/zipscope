@@ -5,9 +5,6 @@
 // A word in backticks is data: the HTML shows it in the mono font. A number in
 // double stars leads its answer: the HTML shows it in a heavier weight.
 
-/** The source code of Zipscope. */
-export const SOURCE_URL = "https://github.com/nickbabcock/zipscope";
-
 /**
  * Adds the offline line to the answer about the device. The line is true
  * only because the front door preloads the workers and the wasm, and the
@@ -23,15 +20,6 @@ export const front = {
   sample: "Try a sample archive",
   /** The first part of `sample`. Below 380 px only this part shows. */
   sampleShort: "Try a sample",
-  /** The text at the end of each answer. */
-  see: "See it",
-  /** The control of the speed band: it opens the sample at its root. */
-  openSample: "Open the sample",
-  /** The accessible names of the "See it" controls. */
-  seeNames: {
-    preview: "See it: the preview of a file in the sample archive",
-    health: "See it: the health of the sample archive",
-  },
   /** The accessible name of the picture of the tool. It opens the sample. */
   shotName: "Open the sample archive in Zipscope",
   /** The map margin while the device makes the sample. */
@@ -119,7 +107,6 @@ export const door = {
     heading: "Your file stays on your device.",
     body: "Zipscope is a static site. It has no server that can receive a file, and the page can connect only to its own site. After one visit, it works offline too.",
     note: "When you save a file to your disk, your browser can check it, as it does for each download.",
-    link: "Read the source code",
   },
   preview: {
     heading: "Look inside before you extract.",
@@ -147,5 +134,4 @@ export const door = {
   close: "What is in your zip?",
   /** The footer. */
   footer: "Zipscope is free and open source, under the MIT license.",
-  footerSource: "Source code",
 } as const;

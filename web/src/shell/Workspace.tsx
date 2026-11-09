@@ -44,7 +44,7 @@ import { ExtractSlot } from "./ExtractSlot";
 import { RemuxSlot } from "./RemuxSlot";
 import type { ExtractRequest } from "./ExtractSlot";
 import { browserStorage, fitWidth, loadWidth, saveWidth } from "./preview-width";
-import { SAMPLE_HOG, SAMPLE_PICTURE_ROW } from "../front/sample-names";
+import { SAMPLE_HOG } from "../front/sample-names";
 
 /** True when `folder` is below `ancestor` in the folder table. */
 function isBelow(session: ArchiveSession, folder: number, ancestor: number): boolean {
@@ -271,25 +271,6 @@ export function Workspace(props: WorkspaceProps) {
       TABLE_FLOOR,
     );
 
-  // "See it" of the health answer: the list is open. The table takes the focus
-  // first, as for each control of the sample, and the focus goes on to the
-  // toggle when the first finding comes.
-  if (view.reveal === "health") {
-    let moved = false;
-    createEffect(
-      () => view.findings().length > 0,
-      (found) => {
-        if (!found || moved) return;
-        moved = true;
-        // A visitor who moved the focus keeps it.
-        const now = document.activeElement;
-        if (now !== document.body && now?.id !== "list-viewport") return;
-        // The ring shows the new place of the focus, also after a pointer click.
-        document.getElementById("health-toggle")?.focus({ focusVisible: true });
-      },
-    );
-  }
-
   const actions = createGridActions({ reader: session.reader, nav });
   /** The name of a listed row, for the examples of health findings. */
   const exampleName = (row: number) =>
@@ -317,19 +298,6 @@ export function Workspace(props: WorkspaceProps) {
     );
   };
 
-  // "See it" of the preview band: when the listing is complete, the
-  // picture of the sample shows in the preview, in its folder.
-  if (view.reveal === "preview") {
-    let shown = false;
-    createEffect(
-      () => view.phase().kind === "listed",
-      (listed) => {
-        if (!listed || shown) return;
-        shown = true;
-        showEntry(SAMPLE_PICTURE_ROW);
-      },
-    );
-  }
   /** The selected file of the table, or undefined when a folder or no
    *  row is selected. The Preview button opens it. */
   let selection: PreviewTarget | undefined;

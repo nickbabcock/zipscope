@@ -13,19 +13,11 @@ import {
   SAMPLE_HOG,
   SAMPLE_NAME,
   SAMPLE_PICTURE,
-  SAMPLE_PICTURE_ROW,
   SAMPLE_ROOT as ROOT,
   SAMPLE_TRAILER_BYTES,
 } from "./sample-names";
 
-export {
-  SAMPLE_DUPLICATE,
-  SAMPLE_HOG,
-  SAMPLE_NAME,
-  SAMPLE_PICTURE,
-  SAMPLE_PICTURE_ROW,
-  SAMPLE_TRAILER_BYTES,
-};
+export { SAMPLE_DUPLICATE, SAMPLE_HOG, SAMPLE_NAME, SAMPLE_PICTURE, SAMPLE_TRAILER_BYTES };
 
 /** The icon of the demo app: three layers on a blue tile. */
 const APP_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
@@ -185,8 +177,7 @@ export function sampleEntries(seed = 240): ZipEntry[] {
   }
   add("debug/demo-app.debug", c.binary(12 * 1024 * KiB, 0.4));
   add("debug/demo-app-helper.debug", c.binary(240 * KiB, 0.45));
-  // A real picture, so the preview of the sample can show one. The name has
-  // no random part, so the row stays SAMPLE_PICTURE_ROW.
+  // A real picture, so the preview of the sample can show one.
   add(SAMPLE_PICTURE.slice(ROOT.length + 1), new TextEncoder().encode(APP_ICON));
 
   for (const name of ["app", "logging", "network", "plugins", "search", "storage", "theme"]) {

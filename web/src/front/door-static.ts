@@ -3,7 +3,7 @@
 // has the whole page before any script runs, and `door.css` styles it. When
 // the app starts, it moves these elements into the door. This module must not
 // use the DOM: the Vite config imports it in Node.
-import { door, SOURCE_URL } from "./strings.ts";
+import { door } from "./strings.ts";
 
 /** The ids that the app needs. Tests and `door.css` use the same ids. */
 export const DOOR_IDS = {
@@ -36,9 +36,6 @@ function copy(text: string): string {
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
 }
-
-/** The slot of a "See it" control. Solid draws the control. */
-const see = (answer: string) => `<span class="door-see" id="door-see-${answer}"></span>`;
 
 /** A Lucide icon, as the tool draws it. */
 function icon(name: "warn" | "down", size: number): string {
@@ -141,21 +138,20 @@ function bands(): string {
       figure(fast.figure, fast.unit),
       fast.heading,
       copy(fast.body),
-      `<p class="door-note">${escape(fast.note)}</p><p class="door-see-line">${see("contents")}</p>`,
+      `<p class="door-note">${escape(fast.note)}</p>`,
     ),
     band(
       "local",
       figure(local.figure, local.unit),
       local.heading,
       copy(local.body),
-      `<p class="door-note">${escape(local.note)}</p><p class="door-see-line"><a href="${SOURCE_URL}">${escape(local.link)}</a></p><p id="front-test"></p>`,
+      `<p class="door-note">${escape(local.note)}</p><p id="front-test"></p>`,
     ),
     band(
       "preview",
       `<div class="door-preview-shot">${picture("preview", preview.shotAlt)}</div>`,
       preview.heading,
       copy(preview.body),
-      `<p class="door-see-line">${see("preview")}</p>`,
     ),
     band(
       "health",
@@ -165,7 +161,7 @@ function bands(): string {
         .join('<span class="door-hidden">, </span>')}</span></p>`,
       health.heading,
       copy(health.body),
-      `<p class="door-sample">${copy(health.sample)}</p><p class="door-see-line">${see("health")}</p>`,
+      `<p class="door-sample">${copy(health.sample)}</p>`,
     ),
     band(
       "save",
@@ -186,7 +182,7 @@ function close(): string {
     `<div id="door-close-buttons"></div>`,
     `</section>`,
     `<div id="door-foot">`,
-    `<p>${escape(door.footer)} <a href="${SOURCE_URL}">${escape(door.footerSource)}</a>.</p>`,
+    `<p>${escape(door.footer)}</p>`,
     `</div>`,
   ].join("");
 }

@@ -9,7 +9,6 @@ import {
   SAMPLE_HOG,
   SAMPLE_NAME,
   SAMPLE_PICTURE,
-  SAMPLE_PICTURE_ROW,
   SAMPLE_TRAILER_BYTES,
   sampleEntries,
 } from "./sample";
@@ -23,9 +22,8 @@ test("the CRC-32 agrees with the standard check value", () => {
   expect(crc32(new TextEncoder().encode("123456789"))).toBe(0xcbf43926);
 });
 
-test("the picture of the sample is an SVG at its fixed row", () => {
-  const entry = sampleEntries()[SAMPLE_PICTURE_ROW]!;
-  expect(entry.name).toBe(SAMPLE_PICTURE);
+test("the picture of the sample is an SVG", () => {
+  const entry = sampleEntries().find((next) => next.name === SAMPLE_PICTURE)!;
   expect(new TextDecoder().decode(entry.data)).toMatch(/^<svg /);
 });
 

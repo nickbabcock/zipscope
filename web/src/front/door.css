@@ -403,10 +403,6 @@ html[data-door="unsupported"] #door-h1 {
   padding-left: 14px;
 }
 
-.door-claim .door-see-line {
-  margin-top: 18px;
-}
-
 .door-warn {
   align-items: flex-start;
   color: var(--door-warn);
@@ -459,28 +455,6 @@ html[data-door="unsupported"] #door-h1 {
 
 .door-icon-down {
   color: var(--door-ink-muted);
-}
-
-/* The slot keeps the space of the control, so that the text does not move
-   when the app draws the control. */
-.door-see {
-  display: inline-block;
-  min-height: 1lh;
-  min-width: 2.6em;
-  vertical-align: top;
-}
-
-/* A coarse pointer gets a hit area of 44 px, with no change to the line. */
-@media (pointer: coarse) {
-  .door-see button {
-    position: relative;
-  }
-
-  .door-see button::after {
-    content: "";
-    inset: -11px -8px;
-    position: absolute;
-  }
 }
 
 #front-test:empty {

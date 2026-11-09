@@ -18,6 +18,7 @@ import { chromium } from "@playwright/test";
 import type { Browser, Page } from "@playwright/test";
 import { preview } from "vite";
 import { SHOTS } from "../src/front/door-static.ts";
+import { SAMPLE_PICTURE, SAMPLE_ROOT } from "../src/front/sample-names.ts";
 
 const out = new URL("../public/door/", import.meta.url).pathname;
 const work = mkdtempSync(path.join(process.env.TMPDIR ?? tmpdir(), "door-shots-"));
@@ -69,9 +70,32 @@ async function previewShot(browser: Browser, url: string, scheme: "light" | "dar
     reducedMotion: "reduce",
   });
   await page.goto(url);
-  // "See it" of the preview band opens the picture of the sample.
-  await page.locator("#see-preview").click();
+  await page.locator("#sample-button").click();
   await settle(page);
+  // Go down the folders to the picture of the sample. A folder row can
+  // name a chain of folders ("icons/hicolor/").
+  const rows = page.locator("#list-viewport [role=row]");
+  const label = '[data-part="label"]';
+  let rest = SAMPLE_PICTURE.slice(SAMPLE_ROOT.length + 1);
+  while (rest.includes("/")) {
+    const labels = await rows.locator(label).allTextContents();
+    const folder = labels.find((name) => name.endsWith("/") && rest.startsWith(name));
+    if (folder === undefined) throw new Error(`no folder row for ${rest}`);
+    await rows
+      .filter({ has: page.locator(label, { hasText: folder }) })
+      .first()
+      .dblclick();
+    rest = rest.slice(folder.length);
+    await rows
+      .locator(label, { hasText: rest.split("/")[0] })
+      .first()
+      .waitFor();
+  }
+  await rows
+    .filter({ has: page.locator(label, { hasText: rest }) })
+    .first()
+    .click();
+  await page.keyboard.press("Enter");
   await page.waitForFunction(
     () => document.querySelector<HTMLImageElement>("#preview-pane img")?.complete === true,
   );

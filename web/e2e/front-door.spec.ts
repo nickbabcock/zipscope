@@ -5,7 +5,7 @@
 import { writeFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import { door, front, SOURCE_URL } from "../src/front/strings.ts";
+import { door, front } from "../src/front/strings.ts";
 import { dropArchive, openArchive, waitForOutcome } from "./listing";
 import { storedZip } from "./stored-zip";
 
@@ -98,7 +98,9 @@ test("the served HTML has the page, the bands and the head tags", async ({ reque
   }
   expect(html).toContain(door.preview.shotAlt);
   expect(html).toContain(door.local.note);
-  expect(html).toContain(`<a href="${SOURCE_URL}">`);
+  // The page links neither the source code nor the sample in the bands.
+  expect(html).not.toContain("github.com");
+  expect(html).not.toContain("door-see");
   expect(html).toContain(door.noScript);
   expect(html).toContain(door.opens);
   expect(html).toContain("<title>Zip viewer in your browser");
@@ -213,7 +215,7 @@ test("the headings are in order, with one h1 on the door", async ({ page }) => {
 
 test("the tab order follows the first view", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator("#see-contents")).toBeVisible();
+  await expect(page.locator("#sample-button")).toBeVisible();
   const order: (string | null)[] = [];
   for (let i = 0; i < 4; i++) {
     await page.keyboard.press("Tab");
@@ -223,7 +225,8 @@ test("the tab order follows the first view", async ({ page }) => {
       ),
     );
   }
-  expect(order).toEqual(["front-open", "sample-button", "door-shot-button", "see-contents"]);
+  // The bands have no controls: the close comes next.
+  expect(order).toEqual(["front-open", "sample-button", "door-shot-button", "close-open"]);
 });
 
 test("the rest of the page shows below the first view", async ({ page }) => {
@@ -232,7 +235,7 @@ test("the rest of the page shows below the first view", async ({ page }) => {
   await picture.scrollIntoViewIfNeeded();
   await expect(picture).toBeVisible();
   await expect(picture).toHaveAttribute("alt", door.preview.shotAlt);
-  await expect(page.locator("#door-local a")).toHaveAttribute("href", SOURCE_URL);
+  await expect(page.locator("#door-bands a, #door-bands button")).toHaveCount(0);
   // The close asks for a file again.
   await expect(page.locator("#close-open")).toHaveText(front.open);
   await expect(page.getByRole("button", { name: front.open })).toHaveCount(2);
@@ -278,7 +281,7 @@ for (const [width, height] of [
   test(`only the work area scrolls at ${width} x ${height}`, async ({ page }) => {
     await page.setViewportSize({ width, height });
     await page.goto("/");
-    await expect(page.locator("#see-contents")).toBeVisible();
+    await expect(page.locator("#sample-button")).toBeVisible();
     await page.mouse.move(width / 2, height / 2);
     await page.mouse.wheel(0, 20_000);
     await expect
@@ -309,40 +312,6 @@ for (const width of [320, 360, 379, 380, 390]) {
     expect(button.x + button.width).toBeLessThanOrEqual(width);
   });
 }
-
-test("a coarse pointer gets a hit area of 44 px on each See it", async ({ browser }) => {
-  const context = await browser.newContext({
-    viewport: { width: 390, height: 844 },
-    hasTouch: true,
-    isMobile: true,
-  });
-  const page = await context.newPage();
-  await page.goto("/");
-  await expect(page.locator("#see-health")).toBeVisible();
-  await expect(page.locator("#door-action")).toHaveText(door.action.coarse, { useInnerText: true });
-  for (const id of ["see-contents", "see-health"]) {
-    await page.locator(`#${id}`).scrollIntoViewIfNeeded();
-    const box = (await page.locator(`#${id}`).boundingBox())!;
-    const x = box.x + box.width / 2;
-    const top = box.y + box.height / 2 - 22;
-    const hit = await page.evaluate(
-      ([px, py]) => [
-        document.elementFromPoint(px!, py!)?.id,
-        document.elementFromPoint(px!, py! + 43)?.id,
-      ],
-      [x, top],
-    );
-    expect(hit, id).toEqual([id, id]);
-  }
-  await context.close();
-});
-
-test("each See it has its own accessible name, and it is a button", async ({ page }) => {
-  await page.goto("/");
-  for (const answer of ["preview", "health"] as const) {
-    await expect(page.getByRole("button", { name: front.seeNames[answer] })).toHaveText(front.see);
-  }
-});
 
 test("a drag of text does not change the action line", async ({ page }) => {
   await page.goto("/");
@@ -460,7 +429,7 @@ test("a dropped file turns the page into the tool without navigation", async ({ 
   expect(new URL(page.url()).pathname).toBe("/");
 });
 
-for (const id of ["see-contents", "sample-button"]) {
+for (const id of ["sample-button"]) {
   test(`Enter on ${id} moves the focus to the table, with no selected row`, async ({ page }) => {
     await page.goto("/");
     await page.locator(`#${id}`).focus();
@@ -491,38 +460,9 @@ test("Enter on the picture selects the space hog and moves the focus to the tabl
   );
 });
 
-test("Enter on see-health moves the focus to the toggle of the health list", async ({ page }) => {
-  await page.goto("/");
-  await page.locator("#see-health").focus();
-  await page.keyboard.press("Enter");
-  expect((await waitForOutcome(page)).outcome).toBe("complete");
-  await expect(page.locator("#health-toggle")).toBeFocused();
-  await expect(page.locator("#health-panel [data-finding]")).toHaveCount(2);
-});
-
-test("See it on the health answer does not take the focus from a visitor who moved it", async ({
-  page,
-}) => {
-  // The visitor moves to the search field as soon as it shows.
-  await page.addInitScript(() => {
-    new MutationObserver((_, observer) => {
-      const field = document.getElementById("search-input");
-      if (field !== null) {
-        field.focus();
-        observer.disconnect();
-      }
-    }).observe(document, { childList: true, subtree: true });
-  });
-  await page.goto("/");
-  await page.locator("#see-health").click();
-  expect((await waitForOutcome(page)).outcome).toBe("complete");
-  await expect(page.locator("#health-panel [data-finding]")).toHaveCount(2);
-  await expect(page.locator("#search-input")).toBeFocused();
-});
-
 test("a real file does not move the focus", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator("#see-contents")).toBeVisible();
+  await expect(page.locator("#sample-button")).toBeVisible();
   const path = test.info().outputPath("focus.zip");
   writeFileSync(path, storedZip([["a/one.txt", 1]]));
   await openArchive(page, path);
@@ -540,7 +480,7 @@ test("a real file gets no ring on the first row after a scroll past the selected
   page,
 }) => {
   await page.goto("/");
-  await expect(page.locator("#see-contents")).toBeVisible();
+  await expect(page.locator("#sample-button")).toBeVisible();
   const path = test.info().outputPath("long.zip");
   writeFileSync(
     path,
@@ -571,7 +511,7 @@ test("a real file gets no ring on the first row after a key press on an empty pa
   page,
 }) => {
   await page.goto("/");
-  await expect(page.locator("#see-contents")).toBeVisible();
+  await expect(page.locator("#sample-button")).toBeVisible();
   const path = test.info().outputPath("short.zip");
   writeFileSync(path, storedZip([["one.txt", 1]]));
   await dropArchive(page, path);
@@ -670,10 +610,10 @@ for (const key of ["Alt+ArrowRight", "Alt+Enter"]) {
   });
 }
 
-test("See it opens the sample at the root listing", async ({ page }) => {
+test("the sample opens at the root listing", async ({ page }) => {
   await page.goto("/");
   await mark(page);
-  await page.locator("#see-contents").click();
+  await page.locator("#sample-button").click();
   expect((await waitForOutcome(page)).outcome).toBe("complete");
   await expect(page.locator("#demo-label")).toHaveText(front.demo);
   await expect(page.locator("#health-panel")).toHaveCount(0);
@@ -744,36 +684,17 @@ test("Back and Forward keep the hog selected after See it", async ({ page }) => 
   await expect(label).toHaveText("debug/demo-app.debug");
 });
 
-for (const [width, height] of [
-  [1440, 900],
-  [390, 844],
-]) {
-  test(`See it of the preview band shows the picture of the sample at ${width} px`, async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width, height });
-    await page.goto("/");
-    await page.locator("#see-preview").click();
-    expect((await waitForOutcome(page)).outcome).toBe("complete");
-    const picture = page.locator("#preview-pane img");
-    await expect(picture).toBeVisible();
-    await expect
-      .poll(() => picture.evaluate((img: HTMLImageElement) => img.naturalWidth))
-      .toBe(256);
-    await expect(page.locator("#preview-pane")).toContainText("demo-app.svg");
-  });
-}
-
-test("See it opens the health list", async ({ page }) => {
+test("the picture of the sample shows in the preview", async ({ page }) => {
   await page.goto("/");
-  await page.locator("#see-health").click();
+  await page.locator("#sample-button").click();
   expect((await waitForOutcome(page)).outcome).toBe("complete");
-  await expect(page.locator("#health-panel [data-finding]")).toHaveCount(2);
-  await expect(page.locator("#health-toggle")).toHaveAttribute("aria-expanded", "true");
-  await expect(page.locator("#health-toggle")).toBeFocused();
-  expect(await page.locator("#health-toggle").evaluate((el) => el.matches(":focus-visible"))).toBe(
-    true,
-  );
+  await page.locator("#search-input").fill("demo-app.svg");
+  const row = page.locator("#list-viewport [role=row]", { hasText: "demo-app.svg" }).first();
+  await row.click();
+  await page.keyboard.press("Enter");
+  const picture = page.locator("#preview-pane img");
+  await expect(picture).toBeVisible();
+  await expect.poll(() => picture.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(256);
 });
 
 test("the control that starts the sample is busy, and a second control takes its place", async ({
@@ -785,12 +706,12 @@ test("the control that starts the sample is busy, and a second control takes its
     await route.continue();
   });
   await page.goto("/");
-  await page.locator("#see-health").click();
-  await expect(page.locator("#see-health")).toHaveAttribute("aria-busy", "true");
+  await page.locator("#sample-button").click();
+  await expect(page.locator("#sample-button")).toHaveAttribute("aria-busy", "true");
   await expect(page.locator("#status")).toHaveText(front.making);
   // A second control takes its place and starts no more work.
   await page.locator("#door-shot-button").click();
-  await expect(page.locator("#see-health")).not.toHaveAttribute("aria-busy", "true");
+  await expect(page.locator("#sample-button")).not.toHaveAttribute("aria-busy", "true");
   await expect(page.locator("#door-shot-button")).toHaveAttribute("aria-busy", "true");
   gate.resolve();
   expect((await waitForOutcome(page)).outcome).toBe("complete");
@@ -819,7 +740,7 @@ test("a generator that fails says so, and the next try works", async ({ page }) 
   await expect.poll(() => page.workers().length).toBe(2);
   expect(page.workers().filter((worker) => worker.url().includes("sample-worker"))).toEqual([]);
   await page.unrouteAll();
-  await page.locator("#see-contents").click();
+  await page.locator("#sample-button").click();
   await expect(page.locator("#status")).not.toHaveText(front.sampleFailed);
   expect((await waitForOutcome(page)).outcome).toBe("complete");
 });

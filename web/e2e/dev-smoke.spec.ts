@@ -76,13 +76,7 @@ test.afterAll(() => {
   }
 });
 
-for (const id of [
-  "see-contents",
-  "door-shot-button",
-  "see-preview",
-  "see-health",
-  "sample-button",
-]) {
+for (const id of ["door-shot-button", "sample-button"]) {
   test(`${id} opens the sample with no new warning of the reactive system`, async ({ page }) => {
     const messages: string[] = [];
     const errors: string[] = [];
@@ -113,7 +107,7 @@ test("a search, a header click and a clear give no new warning of the reactive s
   });
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(base);
-  await page.locator("#see-contents").click({ timeout: 60_000 });
+  await page.locator("#sample-button").click({ timeout: 60_000 });
   expect((await waitForOutcome(page)).outcome).toBe("complete");
   const search = page.locator("#search-input");
   await search.fill("a");

@@ -39,7 +39,7 @@ import { preload as preloadWorkers } from "../workers";
 import { DemoTag } from "./DemoTag";
 import { takeDoor } from "./door-styles";
 import { warmSample } from "./sample-client";
-import type { Answer, SampleUse } from "./sample-names";
+import type { SampleUse } from "./sample-names";
 import { lifecycle } from "../lifecycle/strings";
 import { front, SHOW_OFFLINE_TEST } from "./strings";
 import { nameLabel, nameTitle } from "../label";
@@ -160,24 +160,6 @@ export function FrontDoor(props: FrontDoorProps) {
       styles.named,
     );
 
-  /** A "See it" control of an answer. */
-  const seeIt = (answer: Answer) => (
-    <button
-      id={`see-${answer}`}
-      type="button"
-      aria-label={answer === "contents" ? undefined : front.seeNames[answer]}
-      aria-busy={props.sampleUse === answer ? "true" : undefined}
-      onClick={() => props.onSample(answer)}
-      {...stylex.attrs(
-        styles.see,
-        props.sampleUse === answer && styles.seeBusy,
-        controls.focusRing,
-      )}
-    >
-      {answer === "contents" ? front.openSample : front.see}
-    </button>
-  );
-
   const sampleButton = () => (
     <button
       id="sample-button"
@@ -247,7 +229,7 @@ export function FrontDoor(props: FrontDoorProps) {
             type="button"
             aria-label={front.recentClearName}
             onClick={() => props.onClear()}
-            {...stylex.attrs(styles.see, controls.focusRing)}
+            {...stylex.attrs(styles.linkButton, controls.focusRing)}
           >
             {front.recentClear}
           </button>
@@ -299,9 +281,6 @@ export function FrontDoor(props: FrontDoorProps) {
     const fill = (id: string, ...nodes: unknown[]) =>
       staticPage.querySelector(`#${id}`)?.replaceChildren(...(nodes as Node[]));
     runWithOwner(owner, () => {
-      fill("door-see-contents", seeIt("contents"));
-      fill("door-see-preview", seeIt("preview"));
-      fill("door-see-health", seeIt("health"));
       fill("door-buttons", openButton(true, "front-open"), sampleButton());
       fill("door-close-buttons", openButton(true, "close-open"));
       fill("door-recent", recentList());
@@ -440,8 +419,8 @@ const styles = stylex.create({
   contents: {
     display: "contents",
   },
-  /** "See it": a control in the form of a link, at the end of an answer. */
-  see: {
+  /** A control in the form of a link, in a line of text. */
+  linkButton: {
     backgroundColor: "transparent",
     borderRadius: 2,
     borderStyle: "none",
@@ -452,10 +431,6 @@ const styles = stylex.create({
     textDecorationLine: "underline",
     textDecorationThickness: 1,
     textUnderlineOffset: 3,
-  },
-  seeBusy: {
-    cursor: "progress",
-    textDecorationStyle: "dashed",
   },
   buttonBusy: {
     backgroundColor: color.raised,

@@ -167,7 +167,9 @@ characters.
   add a claim that a test or a benchmark does not support.
 - The page has no questions section. A fact that a visitor needs goes in
   the band that it supports, as one short line.
-- "See it" opens the sample where the sample shows the claim of its band.
+- The page links the sample one time: "Try a sample archive" (the picture
+  of the tool opens the same sample). The bands have no links, and the page
+  does not link the source code.
 - The page has no cards, no icons for each band, no section numbers and no
   accordions.
 - The front door has no top bar: the poster word mark is the header. The
