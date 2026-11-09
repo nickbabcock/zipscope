@@ -10,7 +10,6 @@ export const DOOR_IDS = {
   heading: "door-h1",
   frame: "door-frame",
   page: "door-page",
-  rest: "explainer",
 } as const;
 
 /** The pictures of the tool on the sample archive, in `public/door/`.
@@ -19,6 +18,8 @@ export const DOOR_IDS = {
 export const SHOTS = {
   tool: { width: 1312, height: 760 },
   mobile: { width: 390, height: 430 },
+  /** The preview of the picture of the sample, for the preview band. */
+  preview: { width: 800, height: 540 },
 } as const;
 
 /** The production origin, with no slash at the end. */
@@ -36,16 +37,6 @@ function copy(text: string): string {
     .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
 }
 
-/** Puts each key name of the keyboard answer in a `<kbd>` element. A key is
- *  a whole word: "Space" in "Space shows", not in other words. */
-function withKeys(html: string): string {
-  const names = door.keys.map((key) => key.replace(/[/]/g, "\\/")).join("|");
-  return html.replace(
-    new RegExp(`(^|[\\s(])(${names})(?=[\\s,.)])`, "g"),
-    (_, before: string, key: string) => `${before}<kbd>${key}</kbd>`,
-  );
-}
-
 /** The slot of a "See it" control. Solid draws the control. */
 const see = (answer: string) => `<span class="door-see" id="door-see-${answer}"></span>`;
 
@@ -61,7 +52,7 @@ function icon(name: "warn" | "down", size: number): string {
 /** A picture of the tool, in the light or the night theme of the visitor.
  *  `mobile` gives a second picture for narrow windows. */
 function picture(
-  name: "tool",
+  name: "tool" | "preview",
   alt: string,
   mobile?: "mobile",
   loading: "eager" | "lazy" = "lazy",
@@ -157,11 +148,11 @@ function bands(): string {
       figure(local.figure, local.unit),
       local.heading,
       copy(local.body),
-      `<p class="door-see-line"><a href="${SOURCE_URL}">${escape(local.link)}</a></p><p id="front-test"></p>`,
+      `<p class="door-note">${escape(local.note)}</p><p class="door-see-line"><a href="${SOURCE_URL}">${escape(local.link)}</a></p><p id="front-test"></p>`,
     ),
     band(
       "preview",
-      `<p class="door-figure door-views">${preview.views.map((view) => `<span>${escape(view)}</span>`).join(" ")}</p>`,
+      `<div class="door-preview-shot">${picture("preview", preview.shotAlt)}</div>`,
       preview.heading,
       copy(preview.body),
       `<p class="door-see-line">${see("preview")}</p>`,
@@ -187,29 +178,6 @@ function bands(): string {
   ].join("");
 }
 
-const pair = (question: string, answer: string, after = "") =>
-  `<div class="door-pair"><h3>${escape(question)}</h3><p>${answer}</p>${after}</div>`;
-
-/** The questions. The unsupported state keeps them too. */
-function questions(): string {
-  const { files, reads, inside, device, keyboard } = door;
-  return [
-    `<section id="${DOOR_IDS.rest}" aria-labelledby="door-questions-h">`,
-    `<h2 id="door-questions-h">${escape(door.questions)}</h2>`,
-    `<div class="door-pairs">`,
-    pair(
-      device.question,
-      `${copy(device.answer)}<a href="${SOURCE_URL}">${escape(device.link)}</a>.`,
-    ),
-    pair(files.question, copy(files.answer)),
-    pair(reads.question, copy(reads.answer)),
-    pair(inside.question, copy(inside.answer)),
-    pair(keyboard.question, withKeys(copy(keyboard.answer))),
-    `</div>`,
-    `</section>`,
-  ].join("");
-}
-
 /** The close of the page, and its footer. */
 function close(): string {
   return [
@@ -227,7 +195,7 @@ function close(): string {
 export const HOME_TITLE = "Zip viewer in your browser: no upload, huge archives | Zipscope";
 /** The meta description of the home page. */
 export const HOME_DESCRIPTION =
-  "See what is in a zip, jar, apk, whl, vsix or docx file and where the space went. Zipscope lists a million entries in about a second, in your browser. No upload.";
+  "See what is in a zip, jar, apk, whl, vsix or docx file and where the space went. A 100 GB file or a million entries shows its first rows in about 0.1 s, in your browser. No upload.";
 
 /** Returns the head tags of the page. With no origin, the build is a preview
  *  or a local build, so the page gets a tag that keeps search engines from
@@ -304,7 +272,6 @@ export function doorHtml(): string {
     `<div id="${DOOR_IDS.page}">`,
     hero(),
     bands(),
-    questions(),
     close(),
     `</div></main>`,
     `<div id="door-margin"></div>`,

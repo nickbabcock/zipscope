@@ -1,6 +1,6 @@
 // Makes the pictures of the front door in `public/door/`: the tool on the
-// sample archive, at desktop and phone widths, in the light and the night
-// theme. Each picture is a capture of the real tool in
+// sample archive, at desktop and phone widths, and the preview of the
+// picture of the sample, in the light and the night theme. Each picture is a capture of the real tool in
 // headless Chromium, so it is true for the current build. Run it after a
 // change to the look of the tool:
 //
@@ -61,6 +61,28 @@ async function desktop(browser: Browser, url: string, scheme: "light" | "dark"):
   await page.close();
 }
 
+async function previewShot(browser: Browser, url: string, scheme: "light" | "dark"): Promise<void> {
+  const page = await browser.newPage({
+    viewport: { width: SHOTS.preview.width, height: SHOTS.preview.height },
+    deviceScaleFactor: 2,
+    colorScheme: scheme,
+    reducedMotion: "reduce",
+  });
+  await page.goto(url);
+  // "See it" of the preview band opens the picture of the sample.
+  await page.locator("#see-preview").click();
+  await settle(page);
+  await page.waitForFunction(
+    () => document.querySelector<HTMLImageElement>("#preview-pane img")?.complete === true,
+  );
+  await page.waitForTimeout(500);
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  const file = path.join(work, `preview-${scheme}.png`);
+  await page.screenshot({ path: file });
+  avif(file, `preview-${scheme}`);
+  await page.close();
+}
+
 async function phone(browser: Browser, url: string, scheme: "light" | "dark"): Promise<void> {
   const context = await browser.newContext({
     viewport: { width: SHOTS.mobile.width, height: SHOTS.mobile.height },
@@ -86,6 +108,7 @@ try {
   const url = `http://localhost:${port}/`;
   for (const scheme of ["light", "dark"] as const) {
     await desktop(browser, url, scheme);
+    await previewShot(browser, url, scheme);
     await phone(browser, url, scheme);
   }
 } finally {

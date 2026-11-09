@@ -92,7 +92,7 @@ export const door = {
   lead: "See what is in a zip file and where the space went. You do not unpack it or upload it.",
   /** The line below the picture of the tool: the file types it opens. */
   opens:
-    "Opens any zip file, such as a jar, apk, whl, ipa, vsix or docx file, and zip64 files larger than 4\u00a0GiB.",
+    "Opens any zip file, such as a jar, apk, whl, ipa, vsix or docx file. It does not open 7z, rar or tar files.",
   /** The line below the picture of the tool. */
   shotLabel: "The sample archive in Zipscope. Select the picture to open it.",
   /** The text equivalent of the picture of the tool. */
@@ -107,24 +107,26 @@ export const door = {
   /** The five bands. Each `figure` is a measured value or a real value of
    *  the sample archive. */
   fast: {
-    figure: "1,000,000",
-    unit: "entries listed in 1.2\u00a0s",
-    heading: "Huge archives open at once.",
-    body: "Zipscope reads only the index at the end of the archive. It does not unpack the files to list them. The first rows show in about 0.1\u00a0s, and you can scroll, sort and search while the list fills in. Zip64 archives larger than 4\u00a0GiB open too.",
-    note: "Measured in Chromium on a desktop computer, with a generated archive of 1,000,000 entries.",
+    figure: "100\u00a0ms",
+    unit: "to the first rows, for a 100\u00a0GB file or 1,000,000 entries",
+    heading: "Size does not slow it down.",
+    body: "Zipscope reads only the index at the end of the file, not the data in it. A 100\u00a0GB file opens as fast as a small one. With 1,000,000 entries, you can scroll, sort and search while the rest of the list fills in.",
+    note: "Measured in Chromium on a desktop computer: about 70\u00a0ms for a 100\u00a0GB file, and about 100\u00a0ms to the first rows and 1.0\u00a0s to the full list for 1,000,000 entries.",
   },
   local: {
     figure: "0\u00a0bytes",
     unit: "of your file uploaded",
     heading: "Your file stays on your device.",
     body: "Zipscope is a static site. It has no server that can receive a file, and the page can connect only to its own site. After one visit, it works offline too.",
+    note: "When you save a file to your disk, your browser can check it, as it does for each download.",
     link: "Read the source code",
   },
   preview: {
-    /** The three views of the preview, one for each line of the datum. */
-    views: ["Text.", "Pictures.", "Bytes."],
     heading: "Look inside before you extract.",
-    body: "Select a file to see its text, its picture or its bytes. Zipscope reads only that file from the archive, and it writes nothing to your disk.",
+    body: "Select a file to see its picture, its text or its bytes. Zipscope reads only that file from the archive, and it writes nothing to your disk.",
+    /** The text equivalent of the picture of the preview. */
+    shotAlt:
+      "The preview of Zipscope with the icon of the sample app open: a blue tile with three white layers, beside the list of its folder.",
   },
   health: {
     counts: "1 warning, 1 notice",
@@ -141,37 +143,6 @@ export const door = {
     heading: "Take files out, or repack them all.",
     body: "Save one file or a whole folder to your disk. Or save a copy of the archive with Zstandard compression. Zipscope checks each entry before it goes into the copy.",
     note: "Many unzip tools cannot open Zstandard entries.",
-  },
-  /** The heading of the questions. */
-  questions: "Questions",
-  /** The key names in the keyboard answer. The HTML shows each one as a key
-   *  hint (`<kbd>`). */
-  keys: ["Enter", "Space", "Escape", "Backspace", "/"],
-  files: {
-    question: "Which files does it open?",
-    answer:
-      "Zipscope is a zip viewer for the zip family: .zip, .jar, .apk, .docx, .whl, .vsix and .ipa files, because all of them are zip files. Also zip64 archives larger than 4\u00a0GiB. It does not open 7z, rar or tar files.",
-  },
-  reads: {
-    question: "How does it read a large archive?",
-    answer:
-      "Zipscope reads the central directory: the list of entries at the end of the file. It does not unpack the archive to list it. `unzip -l` prints the same list with one total, so it does not tell you which folder takes the space. The list fills in as it reads, so you can scroll, search and sort before it ends. At a memory limit, it stops and asks before it goes on.",
-  },
-  inside: {
-    question: "Which entries can it preview?",
-    answer:
-      "The preview shows stored, Deflate and Zstandard entries. Encrypted entries are listed and labeled, but Zipscope does not decrypt them.",
-  },
-  device: {
-    question: "Does my file leave this device?",
-    answer:
-      "No. Zipscope is a static site, with no server that can receive a file. The page reads the file in your browser, and its Content Security Policy (`default-src 'self'`) lets it connect only to its own origin. When you save a file to your disk, your browser’s own download check may send its name, hash and other details to a service such as Google Safe Browsing, as it does for other downloads. The page loads no third-party scripts. The source code is MIT licensed, so you can examine this: ",
-    link: "github.com/nickbabcock/zipscope",
-  },
-  keyboard: {
-    question: "Can I use only the keyboard?",
-    answer:
-      "Yes. The arrow keys move in the tree and in the table. Enter opens a folder or the preview of a file, Space shows or hides the preview, Escape closes it, and Backspace goes up one folder. / moves to the search field, and Escape clears it.",
   },
   close: "What is in your zip?",
   /** The footer. */

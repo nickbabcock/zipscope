@@ -208,7 +208,7 @@ const surfaces: Surface[] = [
     more: [
       {
         suffix: "below",
-        shows: "The front door below the first view: the reference answers.",
+        shows: "The front door below the first view: the five bands.",
       },
       {
         suffix: "end",
@@ -218,7 +218,7 @@ const surfaces: Surface[] = [
     run: async ({ page, take }) => {
       await page.locator('#front-door[data-preloaded="true"]').waitFor();
       await take();
-      await page.locator("#explainer").evaluate((element) => element.scrollIntoView());
+      await page.locator("#door-bands").evaluate((element) => element.scrollIntoView());
       await take("below");
       await page.locator("#door-close").evaluate((element) => element.scrollIntoView());
       await take("end");

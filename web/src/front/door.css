@@ -424,13 +424,19 @@ html[data-door="unsupported"] #door-h1 {
   width: 0.8em;
 }
 
-/* The three views of the preview, one on each line. */
-.door-views {
+/* The preview pane of the tool on the picture of the sample. */
+.door-preview-shot picture {
+  border: 1px solid var(--door-rule);
+  border-radius: 8px;
   display: block;
+  max-width: 680px;
+  overflow: hidden;
 }
 
-.door-views span {
+.door-preview-shot img {
   display: block;
+  height: auto;
+  width: 100%;
 }
 
 /* The names of the sample and of its copy, below the figure. */
@@ -479,57 +485,6 @@ html[data-door="unsupported"] #door-h1 {
 
 #front-test:empty {
   display: none;
-}
-
-/* The questions. */
-#explainer {
-  border-top: 1px solid var(--door-rule);
-  box-sizing: border-box;
-  padding: var(--door-band-pad) var(--door-gutter);
-}
-
-#explainer > h2 {
-  font-family: var(--door-display);
-  font-size: var(--door-band-heading);
-  font-weight: 400;
-  letter-spacing: -0.025em;
-  line-height: 1.04;
-  margin: 0 0 40px;
-}
-
-.door-pairs {
-  column-gap: 64px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  row-gap: 40px;
-}
-
-.door-pair {
-  max-width: 68ch;
-}
-
-.door-pair h3 {
-  font-size: var(--door-heading);
-  font-weight: 650;
-  letter-spacing: -0.015em;
-  line-height: 1.2;
-  margin: 0;
-}
-
-.door-pair p {
-  font-size: var(--door-reading);
-  line-height: 1.6;
-  margin: 8px 0 0;
-}
-
-#explainer kbd {
-  background-color: var(--door-ground);
-  border: 1px solid var(--door-rule-strong);
-  border-radius: 4px;
-  font-family: var(--door-mono);
-  font-size: var(--door-body);
-  line-height: 20px;
-  padding-inline: 6px;
 }
 
 /* The close: one large question and the action again. */
@@ -633,11 +588,6 @@ html[data-door="resume"]:has(#door-failed:not([hidden])) #door-page {
 
 html[data-door="resume"]:has(#door-failed:not([hidden])) #door-page > :not(#door-hero),
 html[data-door="resume"]:has(#door-failed:not([hidden])) #door-hero > :not(#door-row) {
-  display: none;
-}
-
-/* This browser cannot read a file, so the page has no close. */
-html[data-door="unsupported"] #door-close {
   display: none;
 }
 

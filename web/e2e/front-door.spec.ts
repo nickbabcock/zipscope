@@ -12,7 +12,6 @@ import { storedZip } from "./stored-zip";
 /** The text of the `h1`: the word mark, a hidden colon and the tagline. */
 const HEADING = `${door.mark}: ${door.tagline}`;
 const BANDS = [door.fast, door.local, door.preview, door.health, door.save];
-const PAIRS = [door.device, door.files, door.reads, door.inside, door.keyboard];
 
 /** A served copy with no marks: the HTML puts these words in `<code>` or `<b>`. */
 const plain = (text: string) => text.replaceAll("`", "").replaceAll("**", "");
@@ -87,9 +86,7 @@ for (const [width, side] of [
   });
 }
 
-test("the served HTML has the page, the bands, the questions and the head tags", async ({
-  request,
-}) => {
+test("the served HTML has the page, the bands and the head tags", async ({ request }) => {
   const html = await (await request.get("/")).text();
   const text = html.replace(/<\/?(code|kbd|b)>/g, "");
   expect(html).toContain('<span id="door-wordmark">Zipscope</span>');
@@ -99,11 +96,8 @@ test("the served HTML has the page, the bands, the questions and the head tags",
     expect(html).toContain(`>${band.heading}</h2>`);
     expect(text).toContain(plain(band.body));
   }
-  for (const pair of PAIRS) {
-    expect(html).toContain(`<h3>${pair.question}</h3>`);
-    expect(text).toContain(plain(pair.answer));
-  }
-  expect(html).toContain("<kbd>Backspace</kbd>");
+  expect(html).toContain(door.preview.shotAlt);
+  expect(html).toContain(door.local.note);
   expect(html).toContain(`<a href="${SOURCE_URL}">`);
   expect(html).toContain(door.noScript);
   expect(html).toContain(door.opens);
@@ -190,7 +184,7 @@ test("a reload with an archive says why nothing works when the entry module cann
   await expect(line).toHaveText(door.noScript);
   await expect(line).toBeInViewport({ ratio: 1 });
   // The rest of the page and the action line stay hidden in this state.
-  for (const selector of ["#door-lead", "#door-shot-frame", "#door-bands", "#explainer"]) {
+  for (const selector of ["#door-lead", "#door-shot-frame", "#door-bands", "#door-close"]) {
     await expect(page.locator(selector), selector).toBeHidden();
   }
   await expect(page.locator("#door-action")).toBeHidden();
@@ -210,9 +204,8 @@ test("the headings are in order, with one h1 on the door", async ({ page }) => {
     .evaluateAll((items) => items.map((item) => item.tagName));
   expect(levels[0]).toBe("H1");
   expect(levels.filter((level) => level === "H1")).toHaveLength(1);
-  expect(levels.slice(1).every((level) => level === "H2" || level === "H3")).toBe(true);
-  // An h3 comes only after an h2.
-  expect(levels.indexOf("H3")).toBeGreaterThan(levels.indexOf("H2"));
+  // The bands and the close are the sections of the page.
+  expect(levels.slice(1).every((level) => level === "H2")).toBe(true);
   await expect(page.locator("h1")).toHaveText(HEADING);
   // The poster word mark is the header: the top bar of the tool does not show.
   await expect(page.locator("header")).toBeHidden();
@@ -235,14 +228,11 @@ test("the tab order follows the first view", async ({ page }) => {
 
 test("the rest of the page shows below the first view", async ({ page }) => {
   await page.goto("/");
-  const section = page.locator("#explainer");
-  await section.scrollIntoViewIfNeeded();
-  await expect(section).toBeVisible();
-  await expect(section.locator("h3")).toHaveCount(PAIRS.length);
-  // The first answer is the one about the device.
-  await expect(section.locator("h3").first()).toHaveText(door.device.question);
-  await expect(section.locator("a")).toHaveAttribute("href", SOURCE_URL);
-  await expect(page.locator("#front-door #explainer")).toHaveCount(1);
+  const picture = page.locator(".door-preview-shot img");
+  await picture.scrollIntoViewIfNeeded();
+  await expect(picture).toBeVisible();
+  await expect(picture).toHaveAttribute("alt", door.preview.shotAlt);
+  await expect(page.locator("#door-local a")).toHaveAttribute("href", SOURCE_URL);
   // The close asks for a file again.
   await expect(page.locator("#close-open")).toHaveText(front.open);
   await expect(page.getByRole("button", { name: front.open })).toHaveCount(2);
@@ -754,6 +744,26 @@ test("Back and Forward keep the hog selected after See it", async ({ page }) => 
   await expect(label).toHaveText("debug/demo-app.debug");
 });
 
+for (const [width, height] of [
+  [1440, 900],
+  [390, 844],
+]) {
+  test(`See it of the preview band shows the picture of the sample at ${width} px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height });
+    await page.goto("/");
+    await page.locator("#see-preview").click();
+    expect((await waitForOutcome(page)).outcome).toBe("complete");
+    const picture = page.locator("#preview-pane img");
+    await expect(picture).toBeVisible();
+    await expect
+      .poll(() => picture.evaluate((img: HTMLImageElement) => img.naturalWidth))
+      .toBe(256);
+    await expect(page.locator("#preview-pane")).toContainText("demo-app.svg");
+  });
+}
+
 test("See it opens the health list", async ({ page }) => {
   await page.goto("/");
   await page.locator("#see-health").click();
@@ -941,7 +951,7 @@ test("the sample still extracts after its worker stopped", async ({ page }) => {
   expect((await waitForOutcome(page)).outcome).toBe("complete");
   await page.getByRole("button", { name: "Extract this folder" }).click();
   await page.locator("#extract-confirm").click();
-  await expect(page.locator("#extract-summary")).toContainText("879 of 879", { timeout: 60_000 });
+  await expect(page.locator("#extract-summary")).toContainText("880 of 880", { timeout: 60_000 });
   await expect(page.locator("#extract-summary")).toContainText("verified");
 });
 
@@ -952,7 +962,7 @@ test("after a real file, a later visit gets the same page", async ({ page }) => 
   await next.goto("/");
   await expect(next.locator("#front-door")).toHaveAttribute("data-state", "first");
   await expect(next.locator("html")).toHaveAttribute("data-door", "first");
-  for (const selector of ["#door-lead", "#door-shot-frame", "#door-bands", "#explainer"]) {
+  for (const selector of ["#door-lead", "#door-shot-frame", "#door-bands", "#door-close"]) {
     await expect(next.locator(selector), selector).toBeVisible();
   }
   await expect(next.locator("#front-open")).toBeInViewport();
@@ -972,9 +982,7 @@ test("a broken storage does not stop the door", async ({ page }) => {
   await expect(page.locator("#door-bands")).toBeVisible();
 });
 
-test("the boot script hides the questions before the first paint after a reload", async ({
-  page,
-}) => {
+test("the boot script hides the page before the first paint after a reload", async ({ page }) => {
   await openSmall(page);
   // Hold the entry module, so only the boot script and the CSS apply.
   await page.route("**/assets/index-*.js", () => {});
@@ -1035,8 +1043,8 @@ test("after Back, the door has Return and Open a file", async ({ page }) => {
   await expect(frontDoor).toHaveAttribute("data-state", "return");
   await expect(page.locator("#return-button")).toHaveText(front.returnTo("small.zip"));
   await expect(page.locator("#other-open")).toHaveText(front.openOther);
-  // No questions, no offline line and nothing below the fold.
-  for (const selector of ["#door-hero", "#front-test", "#explainer"]) {
+  // No poster, no offline line and nothing below the fold.
+  for (const selector of ["#door-hero", "#front-test", "#door-bands"]) {
     await expect(page.locator(selector), selector).toHaveCount(0);
   }
   // The top bar does not show, and the door has the h1.
@@ -1082,13 +1090,11 @@ async function expectUnsupported(page: Page, reason: string): Promise<void> {
   await expect(page.locator("#unsupported-reason")).toHaveText(reason);
   await expect(page.locator("#unsupported")).toContainText(front.supportedBrowsers);
   await expect(page.locator("#sample-button")).toHaveCount(0);
-  // The first view and the bands go. The questions stay. The close asks for
-  // a file, so it goes too.
+  // The static page goes: its actions need a browser that can read a file.
   await expect(page.locator("#door-hero")).toHaveCount(0);
   await expect(page.locator("#door-frame")).toHaveCount(0);
-  await page.locator("#explainer").scrollIntoViewIfNeeded();
-  await expect(page.locator("#explainer")).toBeVisible();
-  await expect(page.locator("#door-close")).toBeHidden();
+  await expect(page.locator("#door-bands")).toHaveCount(0);
+  await expect(page.locator("#door-close")).toHaveCount(0);
   await expect(page.locator("header h1")).toHaveText("Zipscope");
   // The app did not run: no tool, no file input, no status bar and no
   // worker preload. The app preloads its workers in idle time, so wait for

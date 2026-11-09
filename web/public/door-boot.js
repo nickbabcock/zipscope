@@ -1,6 +1,6 @@
 // This script runs before the first paint, in the head of the page. It sets the
 // state of the door for `door.css`: a reload of a tab with an archive, a new
-// tab of a handoff and a window of a file launch do not show the questions. It
+// tab of a handoff and a window of a file launch do not show the poster. It
 // stops the browser from navigating to a dropped file, and keeps the first file
 // for the app, until the app takes the drop. It also shows one line when the
 // entry module cannot run.

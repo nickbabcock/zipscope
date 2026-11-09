@@ -162,8 +162,11 @@ characters.
   browser frame. Selecting it opens the sample at the same place.
 - Five bands follow: speed, local, preview, health, save. Each band has a
   datum on the left at display scale and its claim on the right. A datum is
-  a measured value or a real value of the sample. Do not add a claim that a
-  test or a benchmark does not support.
+  a measured value or a real value of the sample. The preview band shows a
+  capture of the preview of a real picture in the sample instead. Do not
+  add a claim that a test or a benchmark does not support.
+- The page has no questions section. A fact that a visitor needs goes in
+  the band that it supports, as one short line.
 - "See it" opens the sample where the sample shows the claim of its band.
 - The page has no cards, no icons for each band, no section numbers and no
   accordions.

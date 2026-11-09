@@ -1,7 +1,7 @@
 // The front door: the empty state at `/`. On a first
 // visit it is the static page from the served HTML (see `door-static.ts`): the
 // word mark, the row of actions, a picture of the tool on the sample archive,
-// five bands about what Zipscope does, and questions below them. This
+// five bands about what Zipscope does, and a close. This
 // component moves the static page into the work area and draws its controls
 // in the reserved slots. A drop or the sample archive turns the work area into
 // the tool, with no navigation.
@@ -281,8 +281,8 @@ export function FrontDoor(props: FrontDoorProps) {
       id="door-shot-button"
       type="button"
       aria-label={front.shotName}
-      aria-busy={props.sampleUse === "preview" ? "true" : undefined}
-      onClick={() => props.onSample("preview")}
+      aria-busy={props.sampleUse === "shot" ? "true" : undefined}
+      onClick={() => props.onSample("shot")}
       {...stylex.attrs(styles.shot, controls.focusRing)}
     >
       {picture}

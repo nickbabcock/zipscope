@@ -10,8 +10,6 @@ export interface DoorParts {
   heading: HTMLElement | null;
   /** The first view and the rest of the page. */
   page: HTMLElement | null;
-  /** The rest of the page. */
-  rest: HTMLElement | null;
 }
 
 let parts: DoorParts | undefined;
@@ -22,7 +20,7 @@ export function takeDoor(): DoorParts {
   if (parts === undefined) {
     const heading = document.getElementById(DOOR_IDS.heading);
     const body = document.getElementById(DOOR_IDS.page);
-    parts = { heading, page: body, rest: document.getElementById(DOOR_IDS.rest) };
+    parts = { heading, page: body };
     heading?.remove();
     body?.remove();
     document.getElementById(DOOR_IDS.frame)?.remove();

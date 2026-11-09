@@ -26,17 +26,15 @@ test("each sample value of the page comes from the generator", () => {
   expect(door.health.sample).toContain(`${formatSize(SAMPLE_TRAILER_BYTES)} of data`);
 });
 
-test("the home page has one visible h1, the bands as h2, and the questions as h3", () => {
+test("the home page has one visible h1, then the bands and the close as h2", () => {
   const html = doorHtml();
   const levels = [...html.matchAll(/<h([1-6])[ >]/g)].map((match) => Number(match[1]));
   expect(levels[0]).toBe(1);
-  expect(levels.filter((level) => level === 1)).toHaveLength(1);
+  expect(levels.slice(1).every((level) => level === 2)).toBe(true);
   for (const band of [door.fast, door.local, door.preview, door.health, door.save]) {
     expect(html).toContain(`>${band.heading}</h2>`);
   }
-  for (const pair of [door.device, door.files, door.reads, door.inside, door.keyboard]) {
-    expect(html).toContain(`<h3>${pair.question}</h3>`);
-  }
+  expect(html).toContain(door.preview.shotAlt);
   expect(html).toContain(`<span id="door-wordmark">${door.mark}</span>`);
   expect(html).toContain(door.tagline);
 });

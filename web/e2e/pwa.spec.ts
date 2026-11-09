@@ -170,7 +170,7 @@ test("a launch of two files opens two windows, each straight in the tool", async
   }
 });
 
-test("the launch mark hides the questions before the first paint, and with no launch the front door shows", async ({
+test("the launch mark hides the page before the first paint, and with no launch the front door shows", async ({
   page,
 }) => {
   // The state of the door at the end of the parse of the HTML, before the
