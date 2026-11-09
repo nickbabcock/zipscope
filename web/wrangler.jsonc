@@ -1,8 +1,16 @@
 // Cloudflare deploy configuration. Zipscope is assets only: no Worker code.
 // The Cloudflare Vite plugin reads this file. It applies `public/_headers`
 // in build, preview and deploy.
+//
+// The CI deploy jobs (`.github/workflows/ci.yml`) deploy `main` to the custom
+// domain, and uploads each pull request as a version with a preview alias,
+// `pr-<number>-zipscope.<subdomain>.workers.dev`. Preview URLs need the
+// workers.dev subdomain.
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "zipscope",
   "compatibility_date": "2026-10-01",
+  "routes": [{ "pattern": "zip.nickb.dev", "custom_domain": true }],
+  "workers_dev": true,
+  "preview_urls": true,
 }

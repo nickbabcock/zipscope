@@ -58,8 +58,9 @@ run = "pnpm run build"
 description = "Build the wasm and the web app"
 depends = ["build:web"]
 
-# The production origin is here, and only here. It gives the canonical link,
-# og:url and og:image. A build with no ZIPSCOPE_ORIGIN leaves these tags out.
+# The production origin of the page. It gives the canonical link, og:url and
+# og:image. A build with no ZIPSCOPE_ORIGIN leaves these tags out and adds a
+# noindex tag. `web/wrangler.jsonc` has the same host for the custom domain.
 [tasks."build:production"]
 description = "Build the wasm and the web app for production, with the production origin"
 depends = ["pnpm-install", "build:wasm"]
