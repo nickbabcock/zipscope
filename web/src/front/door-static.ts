@@ -8,7 +8,6 @@ import { door, SOURCE_URL } from "./strings.ts";
 /** The ids that the app needs. Tests and `door.css` use the same ids. */
 export const DOOR_IDS = {
   heading: "door-h1",
-  tagline: "door-tagline",
   frame: "door-frame",
   page: "door-page",
   rest: "explainer",
@@ -93,7 +92,6 @@ function actionRow(): string {
     `<span class="door-line" data-line="fine">${escape(action.fine)}</span>`,
     `<span class="door-line" data-line="coarse">${escape(action.coarse)}</span>`,
     `<span class="door-line" data-line="dragging">${escape(action.dragging)}</span>`,
-    `<span class="door-line" data-line="compact">${escape(action.compact)}</span>`,
     `</p>`,
     `<noscript><p id="door-noscript">${escape(noScript)}</p></noscript>`,
     `<p id="door-failed" hidden>${escape(noScript)}</p>`,
@@ -119,6 +117,9 @@ function hero(): string {
     `<section id="door-hero" aria-labelledby="${DOOR_IDS.heading}">`,
     `<p id="door-lead">${copy(door.lead)}</p>`,
     actionRow(),
+    // The recent archives (Chromium): directly below the actions, so a
+    // returning visitor sees them in the first view. The app draws them.
+    `<div id="door-recent"></div>`,
     `<figure id="door-shot-frame">`,
     `<div id="door-shot">${picture("tool", door.shotAlt, "mobile", "eager")}</div>`,
     `<figcaption id="door-shot-label"><span class="door-tag">Demo</span> ${copy(door.shotLabel)}</figcaption>`,
@@ -298,12 +299,10 @@ export function doorHtml(): string {
   return [
     `<div id="root"></div>`,
     `<div id="${DOOR_IDS.frame}">`,
-    `<div id="door-top"><a id="door-mark" href="/">Zipscope</a><span id="${DOOR_IDS.tagline}">${escape(door.barNote)}</span></div>`,
     `<main id="door-work">`,
     heading(),
     `<div id="${DOOR_IDS.page}">`,
     hero(),
-    `<div id="door-recent"></div>`,
     bands(),
     questions(),
     close(),

@@ -90,6 +90,13 @@ test("the front door lists recent archives, reopens one and clears them", async 
     `first.zip${formatSize(FIRST.length)}`,
   ]);
   await expect(page.locator("#recent-note")).toContainText(front.recentNote);
+  // The list is directly below the actions, in the first view.
+  await expect(page.locator("#recent-heading")).toHaveText(front.recentHeading);
+  await expect(page.locator("#recent-list")).toBeInViewport();
+  const actions = (await page.locator("#front-open").boundingBox())!;
+  const list = (await page.locator("#recent").boundingBox())!;
+  expect(list.x).toBe(actions.x);
+  expect(list.y).toBeGreaterThan(actions.y + actions.height);
 
   // A click opens the archive with no picker, and it goes to the top. The
   // file changed its size since the open, so its old row goes.

@@ -23,26 +23,20 @@ export interface TopBarProps {
   /** The narrow layout hides the archive icon and the button label. The
    *  map margin gives the file size. */
   narrow: boolean;
-  /** True on the first visit and reopen doors: the door has "Open a
-   *  file", so the top bar has no second Open button. The file input stays. */
-  hideOpen?: boolean;
-  /** True on the door states: the door has the `h1` of the page, so the word
-   *  mark is a plain element. */
-  plainMark?: boolean;
-  /** The first door puts its line here, beside the word mark. */
-  note?: JSX.Element;
+  /** True on the front door: its word mark is the header, so the bar does
+   *  not show. The file input stays, so the door can open the file picker. */
+  hidden?: boolean;
 }
 
 export function TopBar(props: TopBarProps) {
   return (
-    <header {...stylex.attrs(styles.bar, props.narrow && styles.barNarrow)}>
-      <Show
-        when={props.plainMark !== true}
-        fallback={<span {...stylex.attrs(styles.word)}>Zipscope</span>}
-      >
+    <header
+      {...stylex.attrs(styles.bar, props.narrow && styles.barNarrow, props.hidden && styles.gone)}
+    >
+      {/* On the front door the poster has the `h1` of the page. */}
+      <Show when={props.hidden !== true}>
         <h1 {...stylex.attrs(styles.word)}>Zipscope</h1>
       </Show>
-      {props.note}
       <Show when={props.archive}>
         {(archive) => (
           <>
@@ -95,24 +89,22 @@ export function TopBar(props: TopBarProps) {
         }}
         {...stylex.attrs(controls.visuallyHidden)}
       />
-      <Show when={props.hideOpen !== true}>
-        <button
-          id="open-button"
-          type="button"
-          aria-label="Open archive"
-          title="Open archive"
-          onClick={() => props.onPick()}
-          {...stylex.attrs(
-            controls.button,
-            controls.focusRing,
-            styles.open,
-            props.narrow && styles.openNarrow,
-          )}
-        >
-          <Icon name="open" />
-          <span {...stylex.attrs(props.narrow && styles.gone)}>Open</span>
-        </button>
-      </Show>
+      <button
+        id="open-button"
+        type="button"
+        aria-label="Open archive"
+        title="Open archive"
+        onClick={() => props.onPick()}
+        {...stylex.attrs(
+          controls.button,
+          controls.focusRing,
+          styles.open,
+          props.narrow && styles.openNarrow,
+        )}
+      >
+        <Icon name="open" />
+        <span {...stylex.attrs(props.narrow && styles.gone)}>Open</span>
+      </button>
     </header>
   );
 }

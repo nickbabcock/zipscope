@@ -78,8 +78,8 @@ keeps the font, so the door looks the same offline.
 
 ## Layout
 
-- The app is a grid of three rows: the top bar, the work area and the map
-  margin. All panes share one header strip height and one gutter, so the
+- The tool is a grid of three rows: the top bar, the work area and the map
+  margin (the front door has no top bar). All panes share one header strip height and one gutter, so the
   tree label, the breadcrumb and the preview title are on one line.
 - Three layouts come from a JavaScript signal, not from CSS media queries:
   - At 1200 px or more: the tree, the table and the preview side by side.
@@ -167,7 +167,15 @@ characters.
 - "See it" opens the sample where the sample shows the claim of its band.
 - The page has no cards, no icons for each band, no section numbers and no
   accordions.
-- On the front door the map margin takes the ground and no rule. It keeps
+- The front door has no top bar: the poster word mark is the header. The
+  top bar of the tool shows when a file opens.
+- Each visit to `/` gets the same page in each browser. Where the browser
+  keeps file handles (Chromium), the recent archives are directly below the
+  actions, on the same axis, with a small label.
+- The return and reopen doors are at the top, on the axis of the poster, with
+  the display face for the heading. Their buttons say what they do ("Reopen
+  name.zip", "Open another file").
+- On each door state the map margin takes the ground and no rule. It keeps
   its height.
 
 ### Map margin

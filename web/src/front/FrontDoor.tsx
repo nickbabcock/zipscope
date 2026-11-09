@@ -8,8 +8,8 @@
 //
 // Other states:
 // - Back from the first entry of an open archive: "Return to name.zip".
-// - Chromium keeps the handles of the recent archives. The first door and
-//   the compact door then list them below the row of actions.
+// - Chromium keeps the handles of the recent archives. The first door then
+//   lists them below the row of actions.
 // - A history entry of an archive that is not open, for example after a
 //   reload: "Reopen the file to continue".
 // - A new tab that waits for the file of another tab, or a window of a
@@ -37,19 +37,18 @@ import { Icon } from "../shell/icons";
 import { color, textSize } from "../theme/tokens.stylex";
 import { preload as preloadWorkers } from "../workers";
 import { DemoTag } from "./DemoTag";
-import { compactStored } from "./door-flag";
-import { page, takeDoor } from "./door-styles";
+import { takeDoor } from "./door-styles";
 import { warmSample } from "./sample-client";
 import type { Answer, SampleUse } from "./sample-names";
 import { lifecycle } from "../lifecycle/strings";
 import { front, SHOW_OFFLINE_TEST } from "./strings";
-import { nameLabel, nameText, nameTitle } from "../label";
+import { nameLabel, nameTitle } from "../label";
 
 /** The state of the front door. App derives it, so the door cannot get a
  *  combination that does not occur. The kind is also the `data-state`
  *  value. */
 export type Door =
-  /** A first visit: the questions, or the compact row after a first file. */
+  /** A visit to the home page: the poster. */
   | { kind: "first" }
   /** Back from the first entry of the open archive. */
   | { kind: "return"; name: string }
@@ -121,8 +120,7 @@ export function FrontDoor(props: FrontDoorProps) {
   createEffect(
     () => props.door.kind,
     (kind) => {
-      document.documentElement.dataset.door =
-        kind !== "first" ? "resume" : compactStored() ? "compact" : "first";
+      document.documentElement.dataset.door = kind === "first" ? "first" : "resume";
     },
   );
   onSettled(() => {
@@ -136,7 +134,7 @@ export function FrontDoor(props: FrontDoorProps) {
     };
   });
 
-  const openButton = (primary: boolean, id: string) => (
+  const openButton = (primary: boolean, id: string, label: string = front.open) => (
     <button
       id={id}
       type="button"
@@ -149,7 +147,7 @@ export function FrontDoor(props: FrontDoorProps) {
       )}
     >
       <Icon name="open" />
-      {front.open}
+      {label}
     </button>
   );
 
@@ -203,7 +201,7 @@ export function FrontDoor(props: FrontDoorProps) {
     </button>
   );
 
-  /** The recent archives: a question, a list of names and sizes, and a
+  /** The recent archives: a label, a list of names and sizes, and a
    *  line that says what the browser keeps. The section stays while the
    *  line about a lost archive shows, so its status region is in the page
    *  before its text. */
@@ -218,7 +216,7 @@ export function FrontDoor(props: FrontDoorProps) {
     >
       <Show when={props.recent.length > 0}>
         <h2 id="recent-heading" {...stylex.attrs(styles.recentHeading)}>
-          {front.recentQuestion}
+          {front.recentHeading}
         </h2>
         <ul id="recent-list" {...stylex.attrs(styles.recentList)}>
           <For each={props.recent}>
@@ -350,8 +348,8 @@ export function FrontDoor(props: FrontDoorProps) {
         </Match>
         <Match when={props.door.kind === "return" && props.door}>
           {(door) => (
-            <div {...stylex.attrs(page.pitch, styles.gutterDoor)}>
-              <div {...stylex.attrs(styles.compactRow)}>
+            <div {...stylex.attrs(styles.state)}>
+              <div {...stylex.attrs(styles.stateRow)}>
                 <button
                   ref={(el) => (focusTarget = el)}
                   id="return-button"
@@ -364,30 +362,27 @@ export function FrontDoor(props: FrontDoorProps) {
                     {front.returnTo(nameLabel(door().name))}
                   </span>
                 </button>
-                {openButton(false, "compact-open")}
+                {openButton(false, "other-open", front.openOther)}
               </div>
             </div>
           )}
         </Match>
         <Match when={props.door.kind === "reopen" && props.door}>
           {(door) => (
-            // On the gutter of the first front door, not centered, so the
-            // door does not move to another axis after a reload.
-            <div {...stylex.attrs(page.pitch, styles.gutterDoor)}>
-              <h2 id="reopen-text" {...stylex.attrs(page.unsupported)}>
+            // At the top, on the axis of the poster, so the door does not
+            // move to another place after a reload.
+            <div {...stylex.attrs(styles.state)}>
+              <h2 id="reopen-text" {...stylex.attrs(styles.stateHeading)}>
                 {front.reopen}
               </h2>
               <p id="reopen-why" {...stylex.attrs(styles.reopenWhy)}>
                 {front.reopenWhy}
               </p>
-              {/* The remembered location belongs to the archive button,
-                  so it is directly below it. */}
-              <div {...stylex.attrs(styles.reopen)}>
+              <div {...stylex.attrs(styles.stateRow, styles.reopenRow)}>
                 <button
                   ref={(el) => (focusTarget = el)}
                   id="reopen-button"
                   type="button"
-                  aria-label={front.reopenName(nameText(door().lost.name))}
                   aria-busy={props.sampleUse === "sample" ? "true" : undefined}
                   onClick={() =>
                     door().lost.demo ? props.onSample("sample") : props.onReopen(door().lost)
@@ -396,39 +391,24 @@ export function FrontDoor(props: FrontDoorProps) {
                 >
                   <Icon name="archive" />
                   <span {...stylex.attrs(styles.name)} dir="ltr">
-                    {nameLabel(door().lost.name)}
+                    {front.reopenName(nameLabel(door().lost.name))}
                   </span>
                   <Show when={door().lost.demo}>
                     <DemoTag />
                   </Show>
                 </button>
-                <Show when={door().refused}>
-                  <p id="reopen-refused" role="status" {...stylex.attrs(styles.reopenPlace)}>
-                    {front.reopenRefused}
-                  </p>
-                </Show>
-                <Show when={door().lost.state.path}>
-                  {(path) => (
-                    <p id="reopen-path" dir="ltr" {...stylex.attrs(styles.reopenPlace)}>
-                      {front.reopenPath("")}
-                      <span {...stylex.attrs(styles.reopenValue)}>{nameLabel(path())}</span>
-                    </p>
-                  )}
-                </Show>
-                <Show when={door().lost.state.query}>
-                  {(query) => (
-                    <p id="reopen-search" dir="ltr" {...stylex.attrs(styles.reopenPlace)}>
-                      {front.reopenSearch(nameLabel(query()))}
-                    </p>
-                  )}
-                </Show>
+                {openButton(false, "other-open", front.openOther)}
               </div>
-              <div {...stylex.attrs(styles.reopenRow)}>{openButton(false, "compact-open")}</div>
+              <Show when={door().refused}>
+                <p id="reopen-refused" role="status" {...stylex.attrs(styles.reopenRefused)}>
+                  {front.reopenRefused}
+                </p>
+              </Show>
             </div>
           )}
         </Match>
         <Match when={props.door.kind === "receiving"}>
-          <div {...stylex.attrs(page.pitch, styles.gutterDoor)}>
+          <div {...stylex.attrs(styles.state)}>
             <p id="receiving-text" role="status" {...stylex.attrs(styles.receivingText)}>
               {props.door.kind === "receiving" && props.door.launch
                 ? lifecycle.launching
@@ -506,24 +486,34 @@ const styles = stylex.create({
   named: {
     maxWidth: "100%",
   },
-  compactRow: {
+  /** The return, reopen and receiving doors: at the top, on the axis of
+   *  the poster (see `--door-gutter` in `door.css`). */
+  state: {
+    alignItems: "flex-start",
+    boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+    paddingBlock: "clamp(24px, 3vw, 48px)",
+    paddingInline: "clamp(16px, 4.5vw, 64px)",
+  },
+  /** The display face of the poster (see `door.css`). */
+  stateHeading: {
+    color: color.ink,
+    fontFamily: '"Archivo Black", system-ui, sans-serif',
+    fontSize: "clamp(36px, 6vw, 72px)",
+    fontWeight: 400,
+    letterSpacing: "-0.03em",
+    lineHeight: 1,
+    margin: 0,
+    maxWidth: "18ch",
+    textWrap: "balance",
+  },
+  stateRow: {
     columnGap: 12,
     display: "flex",
     flexWrap: "wrap",
     maxWidth: "100%",
     rowGap: 12,
-  },
-  gutterDoor: {
-    alignItems: "flex-start",
-  },
-  /** The archive button and its remembered location. */
-  reopen: {
-    alignItems: "flex-start",
-    display: "flex",
-    flexDirection: "column",
-    marginTop: 24,
-    maxWidth: "100%",
-    rowGap: 8,
   },
   receivingText: {
     color: color.ink,
@@ -541,31 +531,23 @@ const styles = stylex.create({
     maxWidth: "52ch",
     textWrap: "pretty",
   },
-  reopenPlace: {
+  reopenRefused: {
     color: color.inkMuted,
     fontSize: textSize.body,
     margin: 0,
+    marginTop: 12,
     maxWidth: "60ch",
-    overflowWrap: "anywhere",
   },
-  /** The remembered folder is the reason to reopen: it is in ink. */
-  reopenValue: {
-    color: color.ink,
-  },
-  /** The recent archives, after the row of actions. A rule is above it, as
-   *  between the questions. */
+  /** The recent archives, directly below the row of actions, on its axis. */
   recent: {
-    borderTopColor: color.rule,
-    borderTopStyle: "solid",
-    borderTopWidth: 1,
-    paddingBlock: { default: "24px 40px", [NARROW]: "20px 32px" },
-    paddingInline: { default: "clamp(16px, 7vw, 112px)", [NARROW]: 16 },
+    marginTop: { default: 24, [NARROW]: 20 },
   },
+  /** A small label: the list is quieter than the actions above it. */
   recentHeading: {
-    fontSize: textSize.heading,
-    fontWeight: 650,
-    letterSpacing: "-0.015em",
-    lineHeight: 1.2,
+    color: color.inkMuted,
+    fontSize: textSize.body,
+    fontWeight: 600,
+    lineHeight: 1.4,
     margin: 0,
   },
   /** The rows of the sample answer have the same width and rules. */
@@ -624,8 +606,7 @@ const styles = stylex.create({
     marginTop: { default: 12, ":empty": 0 },
   },
   reopenRow: {
-    display: "flex",
-    marginTop: 36,
+    marginTop: 24,
   },
   name: {
     minWidth: 0,

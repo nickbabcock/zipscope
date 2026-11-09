@@ -35,7 +35,6 @@
   --door-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --door-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --door-display: "Archivo Black", "Arial Black", var(--door-ui);
-  --door-top: 44px;
   --door-status: 28px;
   --door-statement: clamp(28px, 4.4vw, 56px);
   --door-heading: 22px;
@@ -102,48 +101,14 @@ html {
   background-color: color-mix(in srgb, var(--door-water) 28%, transparent);
 }
 
-/* The same frame as the app: top bar, work area and map margin. */
+/* The same frame as the app on the front door: the work area and the map
+   margin. The poster word mark is the header, so there is no top bar. */
 #door-frame {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: var(--door-top) minmax(0, 1fr) var(--door-status);
+  grid-template-rows: minmax(0, 1fr) var(--door-status);
   height: 100dvh;
   overflow: hidden;
-}
-
-#door-top {
-  align-items: center;
-  background-color: var(--door-panel);
-  border-bottom: 1px solid var(--door-rule);
-  box-sizing: border-box;
-  column-gap: 12px;
-  display: flex;
-  padding-inline: 12px;
-}
-
-#door-mark {
-  color: inherit;
-  font-size: var(--door-lead);
-  font-weight: 650;
-  letter-spacing: -0.01em;
-  line-height: 1.4;
-  text-decoration: none;
-}
-
-/* What Zipscope is, beside the word mark. The app moves this element into its
-   top bar on the first door. */
-#door-tagline {
-  color: var(--door-ink-muted);
-  font-size: var(--door-body);
-  font-weight: 400;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-html[data-door="resume"] #door-tagline {
-  display: none;
 }
 
 #door-work {
@@ -151,9 +116,10 @@ html[data-door="resume"] #door-tagline {
   overflow-y: auto;
 }
 
+/* The map margin of the front door is empty while the device is online: it
+   takes the ground and no rule. */
 #door-margin {
-  background-color: var(--door-panel);
-  border-top: 1px solid var(--door-rule);
+  background-color: var(--door-ground);
 }
 
 .door-hidden {
@@ -169,7 +135,7 @@ html[data-door="resume"] #door-tagline {
    line of the same heading. */
 #door-h1 {
   margin: 0;
-  padding: clamp(16px, 2.2vw, 32px) var(--door-gutter) 0;
+  padding: clamp(24px, 3vw, 48px) var(--door-gutter) 0;
 }
 
 #door-wordmark {
@@ -196,7 +162,6 @@ html[data-door="resume"] #door-tagline {
 
 /* The heading of the other door states: they have their own text. */
 html[data-door="resume"] #door-h1,
-html[data-door="compact"] #door-h1,
 html[data-door="unsupported"] #door-h1 {
   clip-path: inset(50%);
   height: 1px;
@@ -232,8 +197,7 @@ html[data-door="unsupported"] #door-h1 {
   text-underline-offset: 3px;
 }
 
-#door-page a:focus-visible,
-#door-mark:focus-visible {
+#door-page a:focus-visible {
   outline: 2px solid var(--door-focus);
   outline-offset: 1px;
 }
@@ -590,11 +554,11 @@ html[data-door="unsupported"] #door-h1 {
   min-height: 44px;
 }
 
-/* On the first door the map margin is empty while the device is online. It
-   takes the ground and no rule, so it does not look like a strip of the
-   tool. It keeps its height, so a reading does not move the page. StyleX
-   rules have a higher specificity than an id. */
-html:has(#front-door[data-state="first"]) footer {
+/* On each state of the front door the map margin is empty while the device
+   is online. It takes the ground and no rule, so it does not look like a
+   strip of the tool. It keeps its height, so a reading does not move the
+   page. StyleX rules have a higher specificity than an id. */
+html:has(#front-door) footer {
   background-color: var(--door-ground) !important;
   border-top-color: transparent !important;
 }
@@ -637,7 +601,7 @@ html:has(#front-door[data-state="first"]) footer {
   pointer-events: none;
   position: fixed;
   right: 4px;
-  top: calc(var(--door-top) + 4px);
+  top: 4px;
   z-index: 2;
 }
 
@@ -649,50 +613,11 @@ html:has(#front-door[data-state="first"]) footer {
   visibility: visible;
 }
 
-/* The recent archives come after the row of actions on the compact door, and
-   after the first view on the first door. The app draws them (see
-   FrontDoor.tsx). Before that, the slot is empty and takes no space. */
+/* The recent archives come directly after the row of actions. The app draws
+   them (see FrontDoor.tsx). Before that, the slot is empty and takes no
+   space. */
 #door-recent {
   flex-shrink: 0;
-}
-
-/* After a first real file: the row of actions at the top, then the reference. */
-html[data-door="compact"] #door-lead,
-html[data-door="compact"] #door-opens,
-html[data-door="compact"] #door-shot-frame,
-html[data-door="compact"] #door-bands,
-html[data-door="compact"] #door-close {
-  display: none;
-}
-
-html[data-door="compact"] #door-row {
-  margin-block: 24px;
-}
-
-html[data-door="compact"] #door-action {
-  display: block;
-  font-size: var(--door-body);
-}
-
-html[data-door="compact"] .door-line,
-html[data-door="compact"] #front-door[data-dragging] .door-line {
-  display: none;
-}
-
-html[data-door="compact"] .door-line[data-line="compact"],
-html[data-door="compact"] #front-door[data-dragging] .door-line[data-line="dragging"] {
-  display: inline;
-  visibility: visible;
-}
-
-html[data-door="compact"] #front-door[data-dragging] .door-line[data-line="compact"] {
-  display: none;
-}
-
-@media (pointer: coarse) {
-  html[data-door="compact"] .door-line[data-line="compact"] {
-    display: none;
-  }
 }
 
 /* A reload of a tab with an archive, or a new tab that waits for a file: the

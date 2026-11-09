@@ -8,10 +8,6 @@
 /** The source code of Zipscope. */
 export const SOURCE_URL = "https://github.com/nickbabcock/zipscope";
 
-/** The flag of the compact door in `localStorage`. It holds no file name.
- *  `public/door-boot.js` reads the same key. */
-export const DOOR_FLAG_KEY = "zipscope.door";
-
 /**
  * Adds the offline line to the answer about the device. The line is true
  * only because the front door preloads the workers and the wasm, and the
@@ -57,19 +53,18 @@ export const front = {
   returnTo: (name: string) => `Return to ${name}`,
   reopen: "Reopen the file to continue",
   /** Below the reopen heading: why the file must open again. */
-  reopenWhy: "The browser does not keep access to a file after a reload.",
-  /** The remembered location below the reopen action. */
-  reopenPath: (path: string) => `Last folder: ${path}`,
-  /** The accessible name of the archive button of the reopen door. */
+  reopenWhy: "Open the file again to continue where you stopped.",
+  /** The label of the archive button of the reopen door. */
   reopenName: (name: string) => `Reopen ${name}`,
-  reopenSearch: (query: string) => `Last search: “${query}”`,
+  /** The second button of the return and reopen doors. */
+  openOther: "Open another file",
   /** The kept handle did not give the file: the permission was refused, or
    *  the file is gone. The text is correct for the two cases. The next
    *  click opens the file picker. */
   reopenRefused: "Zipscope cannot read the kept file. Click again to choose it.",
 
-  /** The list of recent archives on the front door (Chromium). */
-  recentQuestion: "Open a recent archive?",
+  /** The label of the recent archives on the front door (Chromium). */
+  recentHeading: "Recent archives",
   /** What the list keeps. The Clear control follows it. */
   recentNote: "The names of the archives that you open stay in this browser.",
   recentClear: "Clear",
@@ -94,8 +89,6 @@ export const door = {
   /** The visible `h1`: the word mark, then what Zipscope is. */
   mark: "Zipscope",
   tagline: "A zip viewer in your browser.",
-  /** In the top bar beside the small word mark. */
-  barNote: "Nothing to install. Nothing to upload.",
   lead: "See what is in a zip file and where the space went. You do not unpack it or upload it.",
   /** The line below the picture of the tool: the file types it opens. */
   opens:
@@ -109,7 +102,6 @@ export const door = {
     fine: "or drop a file anywhere on this page.",
     coarse: "Choose a file on this device. It stays on this device.",
     dragging: "Drop the file to open it.",
-    compact: "Drop a zip anywhere on this page.",
   },
   noScript: "Zipscope needs JavaScript and WebAssembly to read a file.",
   /** The five bands. Each `figure` is a measured value or a real value of

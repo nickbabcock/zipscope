@@ -61,33 +61,13 @@ for (const [width, height] of [
     const open = (await page.locator("#front-open").boundingBox())!;
     expect(shot.y).toBeGreaterThan(open.y + open.height);
     if (height >= 720) expect(shot.y).toBeLessThan(height - 28);
-    // The page scrolls inside the work area. The bars stay.
+    // The page scrolls inside the work area. The map margin stays.
     await page.locator("#door-close").scrollIntoViewIfNeeded();
     await expect(page.locator("#door-close")).toBeInViewport();
-    await expect(page.locator("header")).toBeInViewport();
     await expect(page.locator("footer")).toBeInViewport();
     expect(await page.evaluate(() => document.scrollingElement!.scrollTop)).toBe(0);
   });
 }
-
-for (const width of [1440, 390, 320]) {
-  test(`the line beside the word mark fits at ${width} px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 844 });
-    await page.goto("/");
-    await expect(page.locator("#front-door")).toBeVisible();
-    const line = page.locator("header #door-tagline");
-    await expect(line).toHaveText(door.barNote);
-    await expect(line).toBeInViewport();
-  });
-}
-
-test("the line beside the word mark is only on the first door", async ({ page }) => {
-  await openSmall(page);
-  await expect(page.locator("#door-tagline")).toHaveCount(0);
-  await page.goBack();
-  await expect(page.locator("#front-door")).toHaveAttribute("data-state", "return");
-  await expect(page.locator("#door-tagline")).toHaveCount(0);
-});
 
 for (const [width, side] of [
   [1440, true],
@@ -126,7 +106,6 @@ test("the served HTML has the page, the bands, the questions and the head tags",
   expect(html).toContain("<kbd>Backspace</kbd>");
   expect(html).toContain(`<a href="${SOURCE_URL}">`);
   expect(html).toContain(door.noScript);
-  expect(html).toContain(door.barNote);
   expect(html).toContain(door.opens);
   expect(html).toContain("<title>Zip viewer in your browser");
   expect(html).toContain('name="description"');
@@ -235,7 +214,8 @@ test("the headings are in order, with one h1 on the door", async ({ page }) => {
   // An h3 comes only after an h2.
   expect(levels.indexOf("H3")).toBeGreaterThan(levels.indexOf("H2"));
   await expect(page.locator("h1")).toHaveText(HEADING);
-  await expect(page.locator("header h1")).toHaveCount(0);
+  // The poster word mark is the header: the top bar of the tool does not show.
+  await expect(page.locator("header")).toBeHidden();
 });
 
 test("the tab order follows the first view", async ({ page }) => {
@@ -314,7 +294,7 @@ for (const [width, height] of [
     await expect
       .poll(() => page.locator("#front-door").evaluate((door) => door.scrollTop))
       .toBeGreaterThan(0);
-    expect((await page.locator("header").boundingBox())!.y).toBe(0);
+    expect((await page.locator("#front-door").boundingBox())!.y).toBe(0);
     await expect(page.locator("footer")).toBeInViewport();
     const metrics = await page.evaluate(() => ({
       top: document.scrollingElement!.scrollTop,
@@ -934,16 +914,7 @@ test("a drop of text before the app starts opens nothing", async ({ page }) => {
   await expect(page.locator("#archive-name")).toHaveCount(0);
 });
 
-test("a file that does not open does not set the flag of the repeat visit", async ({ page }) => {
-  const path = test.info().outputPath("notes.txt");
-  writeFileSync(path, "not a zip archive");
-  await page.goto("/");
-  await openArchive(page, path);
-  expect((await waitForOutcome(page)).outcome).toBe("failed");
-  expect(await page.evaluate(() => localStorage.getItem("zipscope.door"))).toBeNull();
-});
-
-test("a store that refuses the flag does not stop a file", async ({ page }) => {
+test("a store that refuses a write does not stop a file", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.addInitScript(() => {
@@ -974,37 +945,17 @@ test("the sample still extracts after its worker stopped", async ({ page }) => {
   await expect(page.locator("#extract-summary")).toContainText("verified");
 });
 
-test("after a first real file, a later visit gets the compact door", async ({ page }) => {
-  await page.goto("/");
-  await page.locator("#sample-button").click();
-  expect((await waitForOutcome(page)).outcome).toBe("complete");
-  // The sample does not count.
-  expect(await page.evaluate(() => localStorage.getItem("zipscope.door"))).toBeNull();
-
+test("after a real file, a later visit gets the same page", async ({ page }) => {
   await openSmall(page);
-  await expect
-    .poll(() => page.evaluate(() => localStorage.getItem("zipscope.door")))
-    .toBe("compact");
   // A new visit: a new tab with no history entry of an archive.
   const next = await page.context().newPage();
   await next.goto("/");
-  await expect(next.locator("html")).toHaveAttribute("data-door", "compact");
   await expect(next.locator("#front-door")).toHaveAttribute("data-state", "first");
-  for (const selector of ["#door-lead", "#door-shot-frame", "#door-bands", "#door-close"]) {
-    await expect(next.locator(selector), selector).toBeHidden();
+  await expect(next.locator("html")).toHaveAttribute("data-door", "first");
+  for (const selector of ["#door-lead", "#door-shot-frame", "#door-bands", "#explainer"]) {
+    await expect(next.locator(selector), selector).toBeVisible();
   }
   await expect(next.locator("#front-open")).toBeInViewport();
-  await expect(next.locator("#sample-button")).toBeInViewport();
-  await expect(next.locator("#door-action")).toHaveText(door.action.compact, {
-    useInnerText: true,
-  });
-  await expect(next.locator("#explainer")).toBeVisible();
-  // A drop still works.
-  await next.locator("#front-open").waitFor();
-  const path = test.info().outputPath("again.zip");
-  writeFileSync(path, storedZip([["b/two.txt", 1]]));
-  await openArchive(next, path);
-  expect((await waitForOutcome(next)).outcome).toBe("complete");
   await next.close();
 });
 
@@ -1086,13 +1037,13 @@ test("after Back, the door has Return and Open a file", async ({ page }) => {
   const frontDoor = page.locator("#front-door");
   await expect(frontDoor).toHaveAttribute("data-state", "return");
   await expect(page.locator("#return-button")).toHaveText(front.returnTo("small.zip"));
-  await expect(page.locator("#compact-open")).toHaveText(front.open);
+  await expect(page.locator("#other-open")).toHaveText(front.openOther);
   // No questions, no offline line and nothing below the fold.
   for (const selector of ["#door-hero", "#front-test", "#explainer"]) {
     await expect(page.locator(selector), selector).toHaveCount(0);
   }
-  // The word mark is a plain element, and the door has the h1.
-  await expect(page.locator("header h1")).toHaveCount(0);
+  // The top bar does not show, and the door has the h1.
+  await expect(page.locator("header")).toBeHidden();
   await expect(page.locator("#front-door h1")).toHaveText(HEADING);
   await page.locator("#return-button").click();
   await expect(frontDoor).toHaveCount(0);
@@ -1109,8 +1060,10 @@ test("after a reload, the door offers to reopen the file", async ({ page }) => {
   await page.reload();
   await expect(page.locator("#front-door")).toHaveAttribute("data-state", "reopen");
   await expect(page.locator("#reopen-text")).toHaveText(front.reopen);
-  await expect(page.locator("#reopen-button")).toHaveText("small.zip");
-  await expect(page.locator("#compact-open")).toHaveText(front.open);
+  await expect(page.locator("#reopen-why")).toHaveText(front.reopenWhy);
+  await expect(page.locator("#reopen-button")).toHaveText(front.reopenName("small.zip"));
+  await expect(page.locator("#other-open")).toHaveText(front.openOther);
+  await expect(page.locator("header")).toBeHidden();
   await expect(page.locator("#door-hero")).toHaveCount(0);
   await expect(page.locator("#explainer")).toHaveCount(0);
   // The reopen action opens the file picker.

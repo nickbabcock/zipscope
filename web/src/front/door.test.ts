@@ -127,7 +127,6 @@ test("door.css has the literal values of the tokens", () => {
   for (const [name, token] of [
     ["ui", "ui"],
     ["mono", "mono"],
-    ["top", "top"],
     ["status", "status"],
     ["statement", "statement"],
     ["heading", "heading"],

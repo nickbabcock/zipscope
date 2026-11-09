@@ -81,8 +81,7 @@ test("a kept handle reopens the file with no picker and restores the folder", as
   const door = page.locator("#front-door");
   await expect(door).toHaveAttribute("data-state", "reopen");
   await expect(page.locator("#reopen-text")).toHaveText(front.reopen);
-  await expect(page.locator("#reopen-button")).toHaveText("nav.zip");
-  await expect(page.locator("#reopen-path")).toHaveText(front.reopenPath("app/src/main"));
+  await expect(page.locator("#reopen-button")).toHaveText(front.reopenName("nav.zip"));
   await page.locator("#reopen-button").click();
   expect((await waitForOutcome(page)).outcome).toBe("complete");
   await expect.poll(() => crumbs(page)).toEqual(["nav.zip", "/app", "/src/main"]);
@@ -207,8 +206,6 @@ test("without the picker, reopen opens the file input and restores a match", asy
   await expect(page.locator("#location")).toBeVisible();
   await expect.poll(async () => (await entry(page)).query).toBe("guide");
   await page.reload();
-  await expect(page.locator("#reopen-path")).toHaveText(front.reopenPath("docs"));
-  await expect(page.locator("#reopen-search")).toHaveText(front.reopenSearch("guide"));
   const again = page.waitForEvent("filechooser");
   await page.locator("#reopen-button").click();
   await (await again).setFiles(path);

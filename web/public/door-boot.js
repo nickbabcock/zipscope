@@ -7,20 +7,12 @@
 (function () {
   var root = document.documentElement;
   var state = history.state;
-  var flag = null;
-  try {
-    flag = localStorage.getItem("zipscope.door");
-  } catch {
-    flag = null;
-  }
   if (
     location.hash.indexOf("#handoff=") === 0 ||
     location.search === "?launch" ||
     (state && state.zipscope === 1 && state.session && state.name)
   ) {
     root.dataset.door = "resume";
-  } else if (flag === "compact") {
-    root.dataset.door = "compact";
   }
   var kept;
   function guard(event) {

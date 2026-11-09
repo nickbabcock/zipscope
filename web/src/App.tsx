@@ -12,7 +12,6 @@ import {
 } from "solid-js";
 import { NONE, SOFT_BUDGET_BYTES } from "./contracts";
 import type { SortColumn } from "./contracts";
-import { rememberCompact } from "./front/door-flag";
 import { takeDoor } from "./front/door-styles";
 import { FrontDoor } from "./front/FrontDoor";
 import type { Door } from "./front/FrontDoor";
@@ -208,13 +207,6 @@ export function App() {
     nav.openArchive(next.session.id, next.session.info);
     remember(next.session, incoming, restore);
     void next.session.finished.then(registerWorker, registerWorker);
-    // After a first real file, this browser gets the compact door. The sample
-    // does not count, and a file that does not open does not count.
-    if (!demo) {
-      void next.session.finished.then((outcome) => {
-        if (outcome.kind === "complete") rememberCompact();
-      });
-    }
   };
 
   /** Keeps the identity and the handle of the archive for a reload, and
@@ -393,9 +385,6 @@ export function App() {
     return () => clearTimeout(timer);
   });
 
-  /** The line beside the word mark, from the served HTML. */
-  const tagline = takeDoor().tagline;
-
   /** The control that started the sample. It has `aria-busy`. A second
    *  control during the generation takes its place and starts no more work. */
   const [sampleUse, setSampleUse] = createSignal<SampleUse>();
@@ -403,6 +392,9 @@ export function App() {
   const [preloaded, setPreloaded] = createSignal(false);
   /** True after the sample could not open, until the next try. */
   const [sampleFailed, setSampleFailed] = createSignal(false);
+
+  // Takes the static page out of the document before the first render.
+  takeDoor();
 
   /** Generates the demo archive in a worker and opens it. */
   const openSample = async (use: SampleUse) => {
@@ -462,22 +454,17 @@ export function App() {
 
   return (
     <div
-      {...stylex.attrs(styles.app)}
+      {...stylex.attrs(styles.app, (session() === undefined || nav.front()) && styles.appDoor)}
       onDragOver={(event) => event.preventDefault()}
       onDrop={onDrop}
     >
       <TopBar
         archive={session()?.info}
         narrow={narrow()}
-        hideOpen={
-          (session() === undefined || nav.front()) &&
-          (door().kind === "first" || door().kind === "reopen")
-        }
+        hidden={session() === undefined || nav.front()}
         onFile={(file) => offer(plainFile(file))}
         onPick={() => void pick()}
         input={(element) => (fileInput = element)}
-        plainMark={session() === undefined || nav.front()}
-        note={session() === undefined && door().kind === "first" ? tagline : undefined}
         search={
           <Show when={session() !== undefined && !nav.front()}>
             <SearchBox
@@ -590,6 +577,10 @@ const styles = stylex.create({
     lineHeight: 1.4,
     overflow: "hidden",
     WebkitFontSmoothing: "antialiased",
+  },
+  /** The front door has no top bar: its word mark is the header. */
+  appDoor: {
+    gridTemplateRows: `minmax(0, 1fr) ${size.status}`,
   },
   main: {
     display: "grid",
