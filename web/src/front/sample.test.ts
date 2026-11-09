@@ -77,6 +77,6 @@ test("the parser finds the duplicate name and the data after the end", async () 
   expect(found.map((finding) => finding.id).sort()).toEqual(["duplicate-names", "epilogue"]);
   expect(found.every((finding) => finding.severity !== "error")).toBe(true);
   // The answer of the first view says the same as the tool.
-  expect(`${severityCounts(found)}.`).toBe(door.health.counts);
+  expect(severityCounts(found)).toBe(door.health.counts);
   vi.unstubAllGlobals();
 });

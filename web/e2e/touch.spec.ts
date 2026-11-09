@@ -316,8 +316,10 @@ test("a fine pointer keeps the dense layout", async ({ page }) => {
   await page.setViewportSize({ width: 700, height: 900 });
   await page.goto("/");
   expect(await page.evaluate(() => matchMedia("(pointer: fine)").matches)).toBe(true);
+  // The buttons of the front door are 44 px high for each pointer: they are
+  // the main action of the page, not a control of the dense tool.
   for (const id of ["front-open", "sample-button"]) {
-    expect((await box(page.locator(`#${id}`))).height, id).toBe(36);
+    expect((await box(page.locator(`#${id}`))).height, id).toBe(44);
   }
   await page.locator("#sample-button").click();
   await waitForOutcome(page);

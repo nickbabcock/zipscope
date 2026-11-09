@@ -1,0 +1,95 @@
+// Makes the pictures of the front door in `public/door/`: the tool on the
+// sample archive, at desktop and phone widths, in the light and the night
+// theme. Each picture is a capture of the real tool in
+// headless Chromium, so it is true for the current build. Run it after a
+// change to the look of the tool:
+//
+//   mise run gen:door-shots
+//
+// It serves `dist/` (build first), writes PNG captures to a temporary
+// directory, and converts them to AVIF with ImageMagick (`magick`). The sizes
+// come from `SHOTS` in `src/front/door-static.ts`. Each file has two times as
+// many pixels as its CSS size.
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { chromium } from "@playwright/test";
+import type { Browser, Page } from "@playwright/test";
+import { preview } from "vite";
+import { SHOTS } from "../src/front/door-static.ts";
+
+const out = new URL("../public/door/", import.meta.url).pathname;
+const work = mkdtempSync(path.join(process.env.TMPDIR ?? tmpdir(), "door-shots-"));
+const port = Number(process.env.ZIPSCOPE_PORT ?? 4393);
+
+/** Waits until the sample archive is listed and the fonts are ready. */
+async function settle(page: Page): Promise<void> {
+  await page.locator("#status-bar, footer").first().waitFor();
+  await page.waitForFunction(() => document.querySelector("#list-viewport [role=row]") !== null);
+  await page.evaluate(() => document.fonts.ready);
+  // The listing and the preview fill in over a few frames.
+  await page.waitForTimeout(1500);
+}
+
+/** Converts a PNG capture to AVIF in `public/door/`. */
+function avif(png: string, name: string): void {
+  const file = path.join(out, `${name}.avif`);
+  execFileSync("magick", [png, "-strip", "-quality", "62", file]);
+  console.log(`wrote ${file}`);
+}
+
+async function desktop(browser: Browser, url: string, scheme: "light" | "dark"): Promise<void> {
+  const page = await browser.newPage({
+    viewport: { width: SHOTS.tool.width, height: SHOTS.tool.height },
+    deviceScaleFactor: 2,
+    colorScheme: scheme,
+    reducedMotion: "reduce",
+  });
+  await page.goto(url);
+  // The picture opens the sample at the preview of the space hog.
+  await page.locator("#door-shot-button").click();
+  await settle(page);
+  await page.locator("#preview-pane").waitFor();
+  await page.waitForTimeout(1000);
+  // The capture has no focus ring: the selected row shows the selection.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.waitForTimeout(200);
+  const tool = path.join(work, `tool-${scheme}.png`);
+  await page.screenshot({ path: tool });
+  avif(tool, `tool-${scheme}`);
+  await page.close();
+}
+
+async function phone(browser: Browser, url: string, scheme: "light" | "dark"): Promise<void> {
+  const context = await browser.newContext({
+    viewport: { width: SHOTS.mobile.width, height: SHOTS.mobile.height },
+    deviceScaleFactor: 2,
+    colorScheme: scheme,
+    reducedMotion: "reduce",
+    hasTouch: true,
+    isMobile: true,
+  });
+  const page = await context.newPage();
+  await page.goto(url);
+  await page.locator("#sample-button").click();
+  await settle(page);
+  const file = path.join(work, `mobile-${scheme}.png`);
+  await page.screenshot({ path: file });
+  avif(file, `mobile-${scheme}`);
+  await context.close();
+}
+
+const server = await preview({ preview: { port, strictPort: true } });
+const browser = await chromium.launch();
+try {
+  const url = `http://localhost:${port}/`;
+  for (const scheme of ["light", "dark"] as const) {
+    await desktop(browser, url, scheme);
+    await phone(browser, url, scheme);
+  }
+} finally {
+  await browser.close();
+  await server.close();
+  rmSync(work, { recursive: true, force: true });
+}

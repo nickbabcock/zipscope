@@ -80,6 +80,12 @@ depends = ["build"]
 dir = "web"
 run = "pnpm run preview"
 
+[tasks."gen:door-shots"]
+description = "Capture the pictures of the front door from the built tool (needs ImageMagick)"
+depends = ["build"]
+dir = "web"
+run = "node scripts/door-shots.ts"
+
 [tasks."check:preview"]
 description = "Check the served headers, isolation, a small listing, the folder tree and the one-entry pointer check in Chromium"
 depends = ["build", "gen:archive 2000"]

@@ -10,7 +10,8 @@ export const SAMPLE_HOG = `${SAMPLE_ROOT}/debug/demo-app.debug`;
 /** The bytes after the end record. */
 export const SAMPLE_TRAILER_BYTES = 3 * 1024;
 
-/** The answers of the first view. Each has a "See it" control. */
-export type Answer = "contents" | "space" | "health";
+/** The controls of the door that open the sample at one place: the root
+ *  listing, the preview of the space hog, or the health list. */
+export type Answer = "contents" | "preview" | "health";
 /** The control that starts the sample. */
 export type SampleUse = Answer | "sample";

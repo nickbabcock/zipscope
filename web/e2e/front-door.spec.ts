@@ -1,6 +1,7 @@
-// The front door: the three questions in the served HTML, the answers, the
-// connection reading, the demo archive and its "See it" controls, a drop that
-// turns the page into the tool, and the states for returning visitors.
+// The front door: the word mark, the row of actions and the picture of the
+// tool in the served HTML, the five bands and their "See it" controls, the
+// connection reading, the demo archive, a drop that turns the page into the
+// tool, and the states for returning visitors.
 import { writeFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
@@ -8,7 +9,10 @@ import { door, front, SOURCE_URL } from "../src/front/strings.ts";
 import { dropArchive, openArchive, waitForOutcome } from "./listing";
 import { storedZip } from "./stored-zip";
 
-const QUESTIONS = [door.contents.question, door.space.question, door.health.question];
+/** The text of the `h1`: the word mark, a hidden colon and the tagline. */
+const HEADING = `${door.mark}: ${door.tagline}`;
+const BANDS = [door.fast, door.local, door.preview, door.health, door.save];
+const PAIRS = [door.device, door.files, door.reads, door.inside, door.keyboard];
 
 /** A served copy with no marks: the HTML puts these words in `<code>` or `<b>`. */
 const plain = (text: string) => text.replaceAll("`", "").replaceAll("**", "");
@@ -25,52 +29,41 @@ async function marked(page: Page): Promise<boolean> {
 for (const [width, height] of [
   [1440, 900],
   [1440, 780],
+  [1280, 720],
   [1000, 800],
-  [921, 800],
-  [920, 800],
   [720, 800],
-  [641, 800],
   [390, 844],
+  [320, 568],
 ]) {
-  test(`the first view has the questions and the actions at ${width} x ${height}`, async ({
+  test(`the first view has the word mark, the actions and the tool at ${width} x ${height}`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height });
     await page.goto("/");
-    const frontDoor = page.locator("#front-door");
-    await expect(frontDoor).toHaveAttribute("data-state", "first");
-    let previous = -1;
-    for (const question of QUESTIONS) {
-      const heading = page.getByRole("heading", { level: 2, name: question, exact: true });
-      await expect(heading).toBeInViewport({ ratio: 1 });
-      const box = (await heading.boundingBox())!;
-      expect(box.y, question).toBeGreaterThan(previous);
-      previous = box.y;
-    }
-    for (const selector of ["#see-contents", "#see-space", "#see-health"]) {
-      await expect(page.locator(selector)).toHaveText(front.see);
-      await expect(page.locator(selector)).toBeInViewport({ ratio: 1 });
-    }
-    await expect(page.locator("#door-action")).toHaveText(door.action.fine, { useInnerText: true });
+    await expect(page.locator("#front-door")).toHaveAttribute("data-state", "first");
+    const heading = page.getByRole("heading", { level: 1 });
+    await expect(heading).toHaveText(HEADING);
+    await expect(page.locator("#door-wordmark")).toBeInViewport({ ratio: 1 });
+    // The word mark is in the display face, and it does not overflow.
+    expect(
+      await page.locator("#door-wordmark").evaluate((el) => getComputedStyle(el).fontFamily),
+    ).toContain("Archivo Black");
+    const widths = await page
+      .locator("#front-door")
+      .evaluate((door) => [door.scrollWidth, door.clientWidth]);
+    expect(widths[0]).toBe(widths[1]);
     await expect(page.locator("#front-open")).toHaveText(front.open);
-    await expect(page.locator("#sample-button")).toHaveText(front.sample);
+    await expect(page.locator("#sample-button")).toContainText(front.sampleShort);
     await expect(page.locator("#front-open")).toBeInViewport({ ratio: 1 });
     await expect(page.locator("#sample-button")).toBeInViewport({ ratio: 1 });
-    // The action line and the buttons are inside the row.
-    const rowBox = (await page.locator("#door-row").boundingBox())!;
-    for (const selector of ["#door-action", "#door-buttons"]) {
-      const box = (await page.locator(selector).boundingBox())!;
-      expect(box.y, selector).toBeGreaterThanOrEqual(rowBox.y);
-      expect(box.y + box.height, selector).toBeLessThanOrEqual(rowBox.y + rowBox.height);
-    }
-    // The rest of the page is not in the first view: it starts below the top
-    // edge of the sticky row.
-    const rest = (await page.getByRole("heading", { name: door.files.question }).boundingBox())!;
-    expect(rest.y).toBeGreaterThan((await page.locator("#door-row").boundingBox())!.y);
-    // The page scrolls inside the work area. The bars and the row stay.
+    // The picture of the tool starts in the first view, below the actions.
+    const shot = (await page.locator("#door-shot-button").boundingBox())!;
+    const open = (await page.locator("#front-open").boundingBox())!;
+    expect(shot.y).toBeGreaterThan(open.y + open.height);
+    if (height >= 720) expect(shot.y).toBeLessThan(height - 28);
+    // The page scrolls inside the work area. The bars stay.
     await page.locator("#door-close").scrollIntoViewIfNeeded();
     await expect(page.locator("#door-close")).toBeInViewport();
-    await expect(page.locator("#front-open")).toBeInViewport({ ratio: 1 });
     await expect(page.locator("header")).toBeInViewport();
     await expect(page.locator("footer")).toBeInViewport();
     expect(await page.evaluate(() => document.scrollingElement!.scrollTop)).toBe(0);
@@ -83,9 +76,8 @@ for (const width of [1440, 390, 320]) {
     await page.goto("/");
     await expect(page.locator("#front-door")).toBeVisible();
     const line = page.locator("header #door-tagline");
-    await expect(line).toHaveText(door.tagline);
-    await expect(line).toBeInViewport({ ratio: 1 });
-    expect(await line.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await expect(line).toHaveText(door.barNote);
+    await expect(line).toBeInViewport();
   });
 }
 
@@ -97,72 +89,79 @@ test("the line beside the word mark is only on the first door", async ({ page })
   await expect(page.locator("#door-tagline")).toHaveCount(0);
 });
 
-test("the rows have a label, and each name is near its size", async ({ page }) => {
-  await page.goto("/");
-  const rows = page.locator("#door-rows");
-  await expect(rows.locator("caption")).toHaveText(door.space.rowsLabel);
-  await expect(rows.locator("tr")).toHaveCount(door.space.rows.length);
-  expect((await rows.boundingBox())!.width).toBeLessThanOrEqual(480);
-  await expect(rows).toHaveCSS("cursor", "default");
-  // A rule between rows, and none below the last.
-  await expect(rows.locator("tr").last()).toHaveCSS("border-bottom-width", "0px");
-});
+for (const [width, side] of [
+  [1440, true],
+  [390, false],
+] as const) {
+  test(`each band has its datum ${side ? "beside" : "above"} its claim at ${width} px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    for (const id of ["fast", "local", "preview", "health", "save"]) {
+      const datum = (await page.locator(`#door-${id} .door-datum`).boundingBox())!;
+      const claim = (await page.locator(`#door-${id} .door-claim`).boundingBox())!;
+      if (side) expect(claim.x, id).toBeGreaterThan(datum.x + datum.width);
+      else expect(claim.y, id).toBeGreaterThanOrEqual(datum.y + datum.height);
+    }
+  });
+}
 
-test("the served HTML has the questions, the answers and the head tags", async ({ request }) => {
+test("the served HTML has the page, the bands, the questions and the head tags", async ({
+  request,
+}) => {
   const html = await (await request.get("/")).text();
   const text = html.replace(/<\/?(code|kbd|b)>/g, "");
-  expect(html).toContain(`<h1 id="door-h1">${door.heading}</h1>`);
-  // One label covers all three answers, before the first question, and each
-  // answer says that it is for the sample.
-  expect(html.indexOf('id="door-demo"')).toBeLessThan(html.indexOf("<h2"));
+  expect(html).toContain('<span id="door-wordmark">Zipscope</span>');
+  expect(text).toContain(plain(door.lead));
   expect(html.match(/class="door-tag"/g)).toHaveLength(1);
-  expect(html.match(new RegExp(door.samplePrefix, "g"))).toHaveLength(3);
-  // The hidden heading comes before all other headings.
-  expect(html.indexOf("<h1")).toBeLessThan(html.indexOf("<h2"));
-  for (const part of [
-    door.contents,
-    door.space,
-    door.files,
-    door.reads,
-    door.lies,
-    door.inside,
-    door.keyboard,
-    ...door.formats,
-  ]) {
-    expect(html).toContain(`<h2>${part.question}</h2>`);
-    expect(text).toContain(plain(part.answer));
+  for (const band of BANDS) {
+    expect(html).toContain(`>${band.heading}</h2>`);
+    expect(text).toContain(plain(band.body));
   }
-  expect(text).toContain(plain(door.device.answer));
+  for (const pair of PAIRS) {
+    expect(html).toContain(`<h3>${pair.question}</h3>`);
+    expect(text).toContain(plain(pair.answer));
+  }
   expect(html).toContain("<kbd>Backspace</kbd>");
   expect(html).toContain(`<a href="${SOURCE_URL}">`);
   expect(html).toContain(door.noScript);
-  expect(html).toContain(door.tagline);
-  expect(html).toContain("<title>What is in this zip? Zipscope, a zip viewer in your browser");
+  expect(html).toContain(door.barNote);
+  expect(html).toContain(door.opens);
+  expect(html).toContain("<title>Zip viewer in your browser");
   expect(html).toContain('name="description"');
   expect(html).toContain('property="og:title"');
   expect(html).toContain('name="twitter:card"');
   expect(html).toContain('rel="icon"');
+  expect(html).toMatch(
+    /<link\s+rel="preload"\s+href="\/fonts\/archivo-black-latin\.woff2"\s+as="font"/,
+  );
   // No origin in this build: these tags stay out, and the page is not indexed.
   expect(html).toContain('<meta name="robots" content="noindex"');
   expect(html).not.toContain('rel="canonical"');
   expect(html).not.toContain("og:url");
   expect(html).not.toContain("og:image");
+  expect(html).not.toContain("application/ld+json");
   // No inline style or script: the CSP blocks them.
   expect(html).not.toContain("<style");
   expect(html).not.toContain(" style=");
 });
 
-test("the first paint has the styles, with no script", async ({ browser }) => {
+test("the first paint has the styles and the pictures, with no script", async ({ browser }) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
   await page.goto("/");
   await expect(page.locator("#door-noscript")).toHaveText(door.noScript);
-  const heading = page.getByRole("heading", { level: 2, name: door.contents.question });
-  await expect(heading).toBeInViewport({ ratio: 1 });
-  expect(await heading.evaluate((element) => getComputedStyle(element).fontWeight)).toBe("650");
-  expect(await heading.evaluate((element) => getComputedStyle(element).fontFamily)).toContain(
-    "system-ui",
+  const mark = page.locator("#door-wordmark");
+  await expect(mark).toBeInViewport({ ratio: 1 });
+  expect(await mark.evaluate((element) => getComputedStyle(element).fontFamily)).toContain(
+    "Archivo Black",
   );
+  const picture = page.locator("#door-shot img");
+  await expect(picture).toHaveAttribute("alt", door.shotAlt);
+  await expect
+    .poll(() => picture.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+    .toBe(true);
   await context.close();
 });
 
@@ -175,7 +174,7 @@ for (const [name, chunk] of [
     await page.goto("/");
     await expect(page.locator("#door-failed")).toHaveText(door.noScript);
     await expect(page.locator("#door-failed")).toBeVisible();
-    await expect(page.locator("#door-questions")).toBeVisible();
+    await expect(page.locator("#door-hero")).toBeVisible();
   });
 }
 
@@ -211,10 +210,11 @@ test("a reload with an archive says why nothing works when the entry module cann
   const line = page.locator("#door-failed");
   await expect(line).toHaveText(door.noScript);
   await expect(line).toBeInViewport({ ratio: 1 });
-  // The questions and the action line stay hidden in this state.
-  await expect(page.locator("#door-questions")).toBeHidden();
+  // The rest of the page and the action line stay hidden in this state.
+  for (const selector of ["#door-lead", "#door-shot-frame", "#door-bands", "#explainer"]) {
+    await expect(page.locator(selector), selector).toBeHidden();
+  }
   await expect(page.locator("#door-action")).toBeHidden();
-  await expect(page.locator("#explainer")).toBeHidden();
 });
 
 test("a page that starts does not show the line about scripts", async ({ page }) => {
@@ -230,8 +230,11 @@ test("the headings are in order, with one h1 on the door", async ({ page }) => {
     .locator("h1, h2, h3")
     .evaluateAll((items) => items.map((item) => item.tagName));
   expect(levels[0]).toBe("H1");
-  expect(levels.slice(1).every((level) => level === "H2")).toBe(true);
-  await expect(page.locator("h1")).toHaveText(door.heading);
+  expect(levels.filter((level) => level === "H1")).toHaveLength(1);
+  expect(levels.slice(1).every((level) => level === "H2" || level === "H3")).toBe(true);
+  // An h3 comes only after an h2.
+  expect(levels.indexOf("H3")).toBeGreaterThan(levels.indexOf("H2"));
+  await expect(page.locator("h1")).toHaveText(HEADING);
   await expect(page.locator("header h1")).toHaveCount(0);
 });
 
@@ -239,22 +242,15 @@ test("the tab order follows the first view", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("#see-contents")).toBeVisible();
   const order: (string | null)[] = [];
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 4; i++) {
     await page.keyboard.press("Tab");
     order.push(
       await page.evaluate(
-        () => document.activeElement?.id || document.activeElement?.tagName || null,
+        () => document.activeElement?.id || document.activeElement?.textContent || null,
       ),
     );
   }
-  expect(order).toEqual([
-    "see-contents",
-    "see-space",
-    "see-health",
-    "front-open",
-    "sample-button",
-    "A",
-  ]);
+  expect(order).toEqual(["front-open", "sample-button", "door-shot-button", "see-contents"]);
 });
 
 test("the rest of the page shows below the first view", async ({ page }) => {
@@ -262,14 +258,26 @@ test("the rest of the page shows below the first view", async ({ page }) => {
   const section = page.locator("#explainer");
   await section.scrollIntoViewIfNeeded();
   await expect(section).toBeVisible();
-  await expect(section.locator("h2")).toHaveCount(13);
-  // The first reference answer is the one about the device.
-  await expect(section.locator("h2").first()).toHaveText(door.device.question);
+  await expect(section.locator("h3")).toHaveCount(PAIRS.length);
+  // The first answer is the one about the device.
+  await expect(section.locator("h3").first()).toHaveText(door.device.question);
   await expect(section.locator("a")).toHaveAttribute("href", SOURCE_URL);
   await expect(page.locator("#front-door #explainer")).toHaveCount(1);
-  // The sticky row is the only action at the end of the page.
-  await expect(page.locator("#door-close button")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: front.open })).toHaveCount(1);
+  // The close asks for a file again.
+  await expect(page.locator("#close-open")).toHaveText(front.open);
+  await expect(page.getByRole("button", { name: front.open })).toHaveCount(2);
+});
+
+test("the picture of the tool opens the sample at the space hog", async ({ page }) => {
+  await page.goto("/");
+  await mark(page);
+  const shot = page.getByRole("button", { name: front.shotName });
+  await expect(shot).toHaveId("door-shot-button");
+  await shot.click();
+  expect((await waitForOutcome(page)).outcome).toBe("complete");
+  const selected = page.locator('#list-viewport [role=row][aria-selected="true"]');
+  await expect(selected.locator('[data-part="label"]')).toHaveText("debug/demo-app.debug");
+  expect(await marked(page)).toBe(true);
 });
 
 for (const [width, height] of [
@@ -289,11 +297,6 @@ for (const [width, height] of [
       useInnerText: true,
     });
     expect(await page.locator("#front-open").boundingBox()).toEqual(before);
-    // In the stacked row, the short line is directly above the buttons.
-    if (width <= 920) {
-      const line = (await page.locator('.door-line[data-line="dragging"]').boundingBox())!;
-      expect(before!.y - (line.y + line.height)).toBeLessThanOrEqual(12);
-    }
   });
 }
 
@@ -337,25 +340,6 @@ for (const width of [320, 360, 379, 380, 390]) {
   });
 }
 
-test("the sticky row does not cover the focus, and it stops in a low window", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.locator("#see-contents")).toBeVisible();
-  // Tab to the link below the first view. The row does not cover it.
-  await page.locator("#sample-button").focus();
-  await page.keyboard.press("Tab");
-  const link = (await page.locator("#explainer a").boundingBox())!;
-  const row = (await page.locator("#door-row").boundingBox())!;
-  expect(link.y + link.height).toBeLessThanOrEqual(row.y);
-  // In a low window, the row is in the page, below the questions.
-  await page.setViewportSize({ width: 844, height: 390 });
-  await expect(page.locator("#door-row")).toHaveCSS("position", "static");
-  const questions = (await page.locator("#door-questions").boundingBox())!;
-  const lowRow = (await page.locator("#door-row").boundingBox())!;
-  const rest = (await page.locator("#explainer").boundingBox())!;
-  expect(lowRow.y).toBeGreaterThanOrEqual(questions.y + questions.height - 1);
-  expect(rest.y).toBeGreaterThanOrEqual(lowRow.y + lowRow.height - 1);
-});
-
 test("a coarse pointer gets a hit area of 44 px on each See it", async ({ browser }) => {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
@@ -364,9 +348,10 @@ test("a coarse pointer gets a hit area of 44 px on each See it", async ({ browse
   });
   const page = await context.newPage();
   await page.goto("/");
-  await expect(page.locator("#see-space")).toBeVisible();
+  await expect(page.locator("#see-health")).toBeVisible();
   await expect(page.locator("#door-action")).toHaveText(door.action.coarse, { useInnerText: true });
-  for (const id of ["see-contents", "see-space", "see-health"]) {
+  for (const id of ["see-contents", "see-health"]) {
+    await page.locator(`#${id}`).scrollIntoViewIfNeeded();
     const box = (await page.locator(`#${id}`).boundingBox())!;
     const x = box.x + box.width / 2;
     const top = box.y + box.height / 2 - 22;
@@ -384,7 +369,7 @@ test("a coarse pointer gets a hit area of 44 px on each See it", async ({ browse
 
 test("each See it has its own accessible name, and it is a button", async ({ page }) => {
   await page.goto("/");
-  for (const answer of ["contents", "space", "health"] as const) {
+  for (const answer of ["preview", "health"] as const) {
     await expect(page.getByRole("button", { name: front.seeNames[answer] })).toHaveText(front.see);
   }
 });
@@ -522,11 +507,11 @@ for (const id of ["see-contents", "sample-button"]) {
   });
 }
 
-test("Enter on see-space selects the space hog and moves the focus to the table", async ({
+test("Enter on the picture selects the space hog and moves the focus to the table", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.locator("#see-space").focus();
+  await page.locator("#door-shot-button").focus();
   await page.keyboard.press("Enter");
   expect((await waitForOutcome(page)).outcome).toBe("complete");
   await expect(page.locator("#list-viewport")).toBeFocused();
@@ -736,7 +721,7 @@ for (const [width, height] of [
   test(`See it selects the space hog in the largest files at ${width} px`, async ({ page }) => {
     await page.setViewportSize({ width, height });
     await page.goto("/");
-    await page.locator("#see-space").click();
+    await page.locator("#door-shot-button").click();
     expect((await waitForOutcome(page)).outcome).toBe("complete");
     const selected = page.locator('#list-viewport [role=row][aria-selected="true"]');
     await expect(selected).toHaveAttribute("data-block", "true");
@@ -759,7 +744,7 @@ for (const [width, height] of [
   }) => {
     await page.setViewportSize({ width, height });
     await page.goto("/");
-    await page.locator("#see-space").click();
+    await page.locator("#door-shot-button").click();
     expect((await waitForOutcome(page)).outcome).toBe("complete");
     const selected = page.locator('#list-viewport [role=row][aria-selected="true"]');
     await expect(selected.locator('[data-part="label"]')).toHaveText("debug/");
@@ -776,7 +761,7 @@ for (const [width, height] of [
 
 test("Back and Forward keep the hog selected after See it", async ({ page }) => {
   await page.goto("/");
-  await page.locator("#see-space").click();
+  await page.locator("#door-shot-button").click();
   expect((await waitForOutcome(page)).outcome).toBe("complete");
   const label = page.locator('#list-viewport [role=row][aria-selected="true"] [data-part="label"]');
   await expect(label).toHaveText("debug/demo-app.debug");
@@ -814,9 +799,9 @@ test("the control that starts the sample is busy, and a second control takes its
   await expect(page.locator("#see-health")).toHaveAttribute("aria-busy", "true");
   await expect(page.locator("#status")).toHaveText(front.making);
   // A second control takes its place and starts no more work.
-  await page.locator("#see-space").click();
+  await page.locator("#door-shot-button").click();
   await expect(page.locator("#see-health")).not.toHaveAttribute("aria-busy", "true");
-  await expect(page.locator("#see-space")).toHaveAttribute("aria-busy", "true");
+  await expect(page.locator("#door-shot-button")).toHaveAttribute("aria-busy", "true");
   gate.resolve();
   expect((await waitForOutcome(page)).outcome).toBe("complete");
   await expect(page.locator('#list-viewport [role=row][aria-selected="true"]')).toHaveAttribute(
@@ -1005,13 +990,14 @@ test("after a first real file, a later visit gets the compact door", async ({ pa
   await next.goto("/");
   await expect(next.locator("html")).toHaveAttribute("data-door", "compact");
   await expect(next.locator("#front-door")).toHaveAttribute("data-state", "first");
-  await expect(next.locator("#door-questions")).toBeHidden();
+  for (const selector of ["#door-lead", "#door-shot-frame", "#door-bands", "#door-close"]) {
+    await expect(next.locator(selector), selector).toBeHidden();
+  }
   await expect(next.locator("#front-open")).toBeInViewport();
   await expect(next.locator("#sample-button")).toBeInViewport();
   await expect(next.locator("#door-action")).toHaveText(door.action.compact, {
     useInnerText: true,
   });
-  await expect(next.locator("#door-row")).toHaveCSS("position", "static");
   await expect(next.locator("#explainer")).toBeVisible();
   // A drop still works.
   await next.locator("#front-open").waitFor();
@@ -1032,7 +1018,7 @@ test("a broken storage does not stop the door", async ({ page }) => {
   });
   await page.goto("/");
   await expect(page.locator("#front-door")).toHaveAttribute("data-state", "first");
-  await expect(page.locator("#door-questions")).toBeVisible();
+  await expect(page.locator("#door-bands")).toBeVisible();
 });
 
 test("the boot script hides the questions before the first paint after a reload", async ({
@@ -1102,12 +1088,12 @@ test("after Back, the door has Return and Open a file", async ({ page }) => {
   await expect(page.locator("#return-button")).toHaveText(front.returnTo("small.zip"));
   await expect(page.locator("#compact-open")).toHaveText(front.open);
   // No questions, no offline line and nothing below the fold.
-  for (const selector of ["#door-questions", "#front-test", "#explainer"]) {
+  for (const selector of ["#door-hero", "#front-test", "#explainer"]) {
     await expect(page.locator(selector), selector).toHaveCount(0);
   }
   // The word mark is a plain element, and the door has the h1.
   await expect(page.locator("header h1")).toHaveCount(0);
-  await expect(page.locator("#front-door h1")).toHaveText(door.heading);
+  await expect(page.locator("#front-door h1")).toHaveText(HEADING);
   await page.locator("#return-button").click();
   await expect(frontDoor).toHaveCount(0);
   await expect(page.locator("header h1")).toHaveText("Zipscope");
@@ -1125,7 +1111,7 @@ test("after a reload, the door offers to reopen the file", async ({ page }) => {
   await expect(page.locator("#reopen-text")).toHaveText(front.reopen);
   await expect(page.locator("#reopen-button")).toHaveText("small.zip");
   await expect(page.locator("#compact-open")).toHaveText(front.open);
-  await expect(page.locator("#door-questions")).toHaveCount(0);
+  await expect(page.locator("#door-hero")).toHaveCount(0);
   await expect(page.locator("#explainer")).toHaveCount(0);
   // The reopen action opens the file picker.
   const chooser = page.waitForEvent("filechooser");
@@ -1170,9 +1156,9 @@ async function expectUnsupported(page: Page, reason: string): Promise<void> {
   await expect(page.locator("#unsupported-reason")).toHaveText(reason);
   await expect(page.locator("#unsupported")).toContainText(front.supportedBrowsers);
   await expect(page.locator("#sample-button")).toHaveCount(0);
-  // The sample answers go. The rest of the page stays. The close asks for a
-  // file, so it goes too.
-  await expect(page.locator("#door-questions")).toHaveCount(0);
+  // The first view and the bands go. The questions stay. The close asks for
+  // a file, so it goes too.
+  await expect(page.locator("#door-hero")).toHaveCount(0);
   await expect(page.locator("#door-frame")).toHaveCount(0);
   await page.locator("#explainer").scrollIntoViewIfNeeded();
   await expect(page.locator("#explainer")).toBeVisible();

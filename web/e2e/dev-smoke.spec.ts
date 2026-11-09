@@ -76,7 +76,13 @@ test.afterAll(() => {
   }
 });
 
-for (const id of ["see-contents", "see-space", "see-health", "sample-button"]) {
+for (const id of [
+  "see-contents",
+  "door-shot-button",
+  "see-preview",
+  "see-health",
+  "sample-button",
+]) {
   test(`${id} opens the sample with no new warning of the reactive system`, async ({ page }) => {
     const messages: string[] = [];
     const errors: string[] = [];

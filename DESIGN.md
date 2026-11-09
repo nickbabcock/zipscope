@@ -16,9 +16,9 @@ The survey sheet gives the type, the colors, the density and two signatures:
 the contour guides and the map margin. The layout, the navigation and the
 controls are standard web components. Do not add map decoration.
 
-One URL has two surfaces. The front door at `/` must persuade the visitor:
-it asks the three questions of a person with a zip, and it answers each one
-with the real output for a sample archive. The tool is for work: it is
+One URL has two surfaces. The front door at `/` must persuade the visitor.
+It is a poster: the word mark at poster scale, the actions, and a level
+picture of the real tool on a sample archive. The tool is for work: it is
 dense, it is quiet, and the keyboard can do all of it. When the visitor
 drops a file, the front door changes into the tool. The URL does not change.
 
@@ -61,11 +61,14 @@ bar fill is at least 3:1, in both themes. The contour guides are decorative
 
 ## Type
 
-One plain family carries the tool and the front door: the system UI stack,
-and the system mono stack for offsets, hex, archive comments and key hints.
-The front door gets its voice from scale and weight, not from a second
-family. No web font downloads: the app works offline and has a strict bundle
-budget.
+One plain family carries the tool: the system UI stack, and the system mono
+stack for offsets, hex, archive comments and key hints. The tool downloads
+no web font: it has a strict bundle budget.
+
+The front door has one display face, Archivo Black (SIL OFL, 19 KB, in
+`public/fonts/`). Only the word mark, the band headings, the figures and the
+close use it. Running text stays in the system UI stack. The service worker
+keeps the font, so the door looks the same offline.
 
 - **Tabular figures.** Each number uses tabular figures. Numeric columns
   align right with their headers.
@@ -97,8 +100,9 @@ budget.
 ### Touch screens
 
 A touch screen (`pointer: coarse` on the primary pointer) gets 36 px rows and
-larger targets. The front door buttons are 44 px high. Nothing changes for a
-mouse, and a touch laptop with a mouse keeps the dense layout.
+larger targets. Nothing changes for a mouse, and a touch laptop with a mouse
+keeps the dense layout. The buttons of the front door are 44 px high for
+each pointer: they are the main action of the page.
 
 ## Depth and shape
 
@@ -150,10 +154,21 @@ characters.
 
 - The whole door is in the served HTML, so the first paint is the styled
   page and a reader with no script can read all of it.
-- The page is a question and then a plain answer. It has no cards, no icons
-  for each question, no section numbers and no accordions.
-- Each answer is the real output of the tool for the sample archive, and a
-  "See it" control opens the tool on that answer.
+- One left axis carries the page. The word mark fills about 90% of it. The
+  actions are in the first view at 1280 x 720 and larger, and the picture of
+  the tool starts in the first view below them.
+- The picture is a capture of the real tool on the sample archive, in the
+  theme of the visitor (`mise run gen:door-shots`). It is level: no tilt, no
+  browser frame. Selecting it opens the sample at the same place.
+- Five bands follow: speed, local, preview, health, save. Each band has a
+  datum on the left at display scale and its claim on the right. A datum is
+  a measured value or a real value of the sample. Do not add a claim that a
+  test or a benchmark does not support.
+- "See it" opens the sample where the sample shows the claim of its band.
+- The page has no cards, no icons for each band, no section numbers and no
+  accordions.
+- On the front door the map margin takes the ground and no rule. It keeps
+  its height.
 
 ### Map margin
 
@@ -179,8 +194,9 @@ characters.
 
 - Do not encode size or health by hue alone. Health always has text and an
   icon or a badge.
-- Do not add a web font, paper texture, compass rose, map shapes, neon or
-  glow.
+- Do not add a web font to the tool. Do not add a second face to the front
+  door.
+- Do not add paper texture, a compass rose, map shapes, neon or glow.
 - Do not add a shadow to a surface at rest.
 - Do not use water for decoration.
 - Do not add a load animation, or an animation that shows no change of

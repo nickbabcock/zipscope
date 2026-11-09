@@ -1,8 +1,8 @@
-// The served HTML of the front door: the first view and the rest of the
-// page. The build puts it in `index.html` (see `vite.config.ts`), so a
-// reader or a search engine has the whole page before any script runs, and
-// `door.css` styles it. When the app starts, it moves these elements into the
-// door. This module must not use the DOM: the Vite config imports it in Node.
+// The served HTML of the front door. The build puts it in `index.html` (see
+// `vite.config.ts`), so a reader or a search engine
+// has the whole page before any script runs, and `door.css` styles it. When
+// the app starts, it moves these elements into the door. This module must not
+// use the DOM: the Vite config imports it in Node.
 import { door, SOURCE_URL } from "./strings.ts";
 
 /** The ids that the app needs. Tests and `door.css` use the same ids. */
@@ -13,6 +13,17 @@ export const DOOR_IDS = {
   page: "door-page",
   rest: "explainer",
 } as const;
+
+/** The pictures of the tool on the sample archive, in `public/door/`.
+ *  `scripts/door-shots.ts` makes them. The sizes are CSS pixels: each file
+ *  has two times as many. */
+export const SHOTS = {
+  tool: { width: 1312, height: 760 },
+  mobile: { width: 390, height: 430 },
+} as const;
+
+/** The production origin, with no slash at the end. */
+export const ORIGIN = "https://zip.nickb.dev";
 
 function escape(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -39,55 +50,45 @@ function withKeys(html: string): string {
 /** The slot of a "See it" control. Solid draws the control. */
 const see = (answer: string) => `<span class="door-see" id="door-see-${answer}"></span>`;
 
-/** The Lucide `triangle-alert` icon at 16 px, as the tool draws it. */
-const WARN_ICON =
-  '<svg class="door-icon" aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
-
-/** The slot of a size bar of the tool, in pixels. */
-const BAR_SLOT = 48;
-/** The least width of a bar of the tool, in pixels (`hasBar` in `view/model.ts`). */
-const BAR_MIN = 3;
-
-/** A row of the sample on the pitch of the tool: name, bar and size. An SVG
- *  gives the width of the bar, because the CSP blocks inline styles. */
-function sampleRow(row: { name: string; size: string; share: number }): string {
-  const width = (row.share / 100) * BAR_SLOT;
-  const bar =
-    width >= BAR_MIN
-      ? `<svg width="${BAR_SLOT}" height="6" aria-hidden="true"><rect width="${width}" height="6" rx="1"/></svg>`
-      : "";
-  return `<tr><th scope="row">${escape(row.name)}</th><td class="door-row-bar">${bar}</td><td class="door-row-size">${escape(row.size)}</td></tr>`;
+/** A Lucide icon, as the tool draws it. */
+function icon(name: "warn" | "down", size: number): string {
+  const paths = {
+    warn: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+    down: '<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>',
+  };
+  return `<svg class="door-icon door-icon-${name}" aria-hidden="true" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${paths[name]}</svg>`;
 }
 
-function questions(): string {
-  const { contents, space, health } = door;
-  /** The hidden start of each answer. */
-  const prefix = `<span class="door-hidden">${escape(door.samplePrefix)}</span>`;
+/** A picture of the tool, in the light or the night theme of the visitor.
+ *  `mobile` gives a second picture for narrow windows. */
+function picture(
+  name: "tool",
+  alt: string,
+  mobile?: "mobile",
+  loading: "eager" | "lazy" = "lazy",
+): string {
+  const size = SHOTS[name];
+  const narrow = "(max-width: 640px)";
+  const source = (file: string, media: string, box: { width: number; height: number }) =>
+    `<source srcset="/door/${file}.avif" type="image/avif" media="${media}" width="${box.width}" height="${box.height}">`;
   return [
-    `<section id="door-questions" aria-describedby="door-demo">`,
-    `<p id="door-demo"><span class="door-tag">Demo</span> ${copy(door.demoLabel)}</p>`,
-    `<div class="door-q" id="door-q-contents">`,
-    `<h2>${escape(contents.question)}</h2>`,
-    `<p class="door-a">${prefix}${copy(contents.answer)} ${see("contents")}</p>`,
-    `</div>`,
-    `<div class="door-q" id="door-q-space">`,
-    `<h2>${escape(space.question)}</h2>`,
-    `<p class="door-a">${prefix}${copy(space.answer)} ${see("space")}</p>`,
-    `<div id="door-bar" role="img" aria-label="${escape(space.shareName)}"><div id="door-bar-track"><div id="door-bar-fill"></div></div><span id="door-bar-share">${space.share}</span></div>`,
-    `<table id="door-rows"><caption>${escape(space.rowsLabel)}</caption><tbody>${space.rows.map(sampleRow).join("")}</tbody></table>`,
-    `</div>`,
-    `<div class="door-q" id="door-q-health">`,
-    `<h2>${escape(health.question)}</h2>`,
-    `<p class="door-a">${prefix}${WARN_ICON}<strong class="door-warn">${escape(health.counts)}</strong> ${copy(health.answer)} ${see("health")}</p>`,
-    `</div>`,
-    `</section>`,
+    "<picture>",
+    mobile === undefined
+      ? ""
+      : source(`${mobile}-dark`, `${narrow} and (prefers-color-scheme: dark)`, SHOTS[mobile]) +
+        source(`${mobile}-light`, narrow, SHOTS[mobile]),
+    source(`${name}-dark`, "(prefers-color-scheme: dark)", size),
+    `<img src="/door/${name}-light.avif" width="${size.width}" height="${size.height}" alt="${escape(alt)}" loading="${loading}" decoding="async">`,
+    "</picture>",
   ].join("");
 }
 
+/** The row of actions: the buttons, then the line about a drop. */
 function actionRow(): string {
   const { action, noScript } = door;
   return [
     `<div id="door-row">`,
+    `<div id="door-buttons"></div>`,
     `<p id="door-action">`,
     `<span class="door-line" data-line="fine">${escape(action.fine)}</span>`,
     `<span class="door-line" data-line="coarse">${escape(action.coarse)}</span>`,
@@ -96,67 +97,216 @@ function actionRow(): string {
     `</p>`,
     `<noscript><p id="door-noscript">${escape(noScript)}</p></noscript>`,
     `<p id="door-failed" hidden>${escape(noScript)}</p>`,
-    `<div id="door-buttons"></div>`,
     `</div>`,
   ].join("");
 }
 
-function rest(): string {
-  const pair = (question: string, answer: string, after = "") =>
-    `<div class="door-pair"><h2>${escape(question)}</h2><p>${answer}</p>${after}</div>`;
-  const { files, reads, lies, inside, device, keyboard, close } = door;
+/** The visible `h1`: a word mark at poster scale, then what the page is. */
+function heading(): string {
   return [
-    `<section id="${DOOR_IDS.rest}">`,
-    // The first question of a person with a large file. It is not the lead of
-    // the page, but it is the first answer here.
-    pair(
-      device.question,
-      `${copy(device.answer)}<a href="${SOURCE_URL}">${escape(device.link)}</a>.`,
-      `<p id="front-test"></p>`,
-    ),
-    pair(files.question, copy(files.answer)),
-    pair(reads.question, copy(reads.answer)),
-    pair(lies.question, copy(lies.answer)),
-    pair(inside.question, copy(inside.answer)),
-    pair(keyboard.question, withKeys(copy(keyboard.answer))),
-    ...door.formats.map((format) => pair(format.question, copy(format.answer))),
-    `<div id="door-close"><h2>${escape(close)}</h2></div>`,
+    `<h1 id="${DOOR_IDS.heading}">`,
+    `<span id="door-wordmark">${escape(door.mark)}</span>`,
+    `<span class="door-hidden">: </span>`,
+    `<span id="door-h1-tagline">${escape(door.tagline)}</span>`,
+    `</h1>`,
+  ].join("");
+}
+
+/** The first view: the lead, the actions, the picture of the tool and the
+ *  file types that Zipscope opens. */
+function hero(): string {
+  return [
+    `<section id="door-hero" aria-labelledby="${DOOR_IDS.heading}">`,
+    `<p id="door-lead">${copy(door.lead)}</p>`,
+    actionRow(),
+    `<figure id="door-shot-frame">`,
+    `<div id="door-shot">${picture("tool", door.shotAlt, "mobile", "eager")}</div>`,
+    `<figcaption id="door-shot-label"><span class="door-tag">Demo</span> ${copy(door.shotLabel)}</figcaption>`,
+    `</figure>`,
+    `<p id="door-opens">${escape(door.opens)}</p>`,
     `</section>`,
   ].join("");
 }
 
-/** Returns the head tags that need the production origin. With no origin,
- *  the build is a preview or a local build, so it returns only a tag that
- *  keeps search engines from indexing the page. */
-export function originTags(
-  origin: string | undefined,
-): { tag: string; attrs: Record<string, string> }[] {
-  const base = origin?.replace(/\/+$/, "");
-  if (base === undefined || base === "") {
-    return [{ tag: "meta", attrs: { name: "robots", content: "noindex" } }];
-  }
+/** One band of the five: a datum on the left, the claim on the right. */
+function band(id: string, datum: string, title: string, body: string, after = ""): string {
   return [
-    { tag: "link", attrs: { rel: "canonical", href: `${base}/` } },
-    { tag: "meta", attrs: { property: "og:url", content: `${base}/` } },
-    { tag: "meta", attrs: { property: "og:image", content: `${base}/og.png` } },
-  ];
+    `<section class="door-band" id="door-${id}" aria-labelledby="door-${id}-h">`,
+    `<div class="door-datum">${datum}</div>`,
+    `<div class="door-claim"><h2 id="door-${id}-h">${escape(title)}</h2><p>${body}</p>${after}</div>`,
+    `</section>`,
+  ].join("");
 }
 
-/** Returns the HTML in the place of the root element: the hidden heading
- *  first, the root element, and then the frame of the static page. */
+function bands(): string {
+  const { fast, local, preview, health, save } = door;
+  const figure = (value: string, unit: string) =>
+    `<p class="door-figure">${escape(value)}</p><p class="door-unit">${escape(unit)}</p>`;
+  return [
+    `<div id="door-bands">`,
+    band(
+      "fast",
+      figure(fast.figure, fast.unit),
+      fast.heading,
+      copy(fast.body),
+      `<p class="door-note">${escape(fast.note)}</p><p class="door-see-line">${see("contents")}</p>`,
+    ),
+    band(
+      "local",
+      figure(local.figure, local.unit),
+      local.heading,
+      copy(local.body),
+      `<p class="door-see-line"><a href="${SOURCE_URL}">${escape(local.link)}</a></p><p id="front-test"></p>`,
+    ),
+    band(
+      "preview",
+      `<p class="door-figure door-views">${preview.views.map((view) => `<span>${escape(view)}</span>`).join(" ")}</p>`,
+      preview.heading,
+      copy(preview.body),
+      `<p class="door-see-line">${see("preview")}</p>`,
+    ),
+    band(
+      "health",
+      `<p class="door-figure door-warn">${icon("warn", 48)}<span>${health.counts
+        .split(", ")
+        .map((part) => `<span>${escape(part)}</span>`)
+        .join('<span class="door-hidden">, </span>')}</span></p>`,
+      health.heading,
+      copy(health.body),
+      `<p class="door-sample">${copy(health.sample)}</p><p class="door-see-line">${see("health")}</p>`,
+    ),
+    band(
+      "save",
+      `${figure(save.figure, save.unit)}<p class="door-files"><code>${escape(save.from)}</code>${icon("down", 16)}<code>${escape(save.to)}</code></p>`,
+      save.heading,
+      copy(save.body),
+      `<p class="door-note">${escape(save.note)}</p>`,
+    ),
+    `</div>`,
+  ].join("");
+}
+
+const pair = (question: string, answer: string, after = "") =>
+  `<div class="door-pair"><h3>${escape(question)}</h3><p>${answer}</p>${after}</div>`;
+
+/** The questions. The unsupported state keeps them too. */
+function questions(): string {
+  const { files, reads, inside, device, keyboard } = door;
+  return [
+    `<section id="${DOOR_IDS.rest}" aria-labelledby="door-questions-h">`,
+    `<h2 id="door-questions-h">${escape(door.questions)}</h2>`,
+    `<div class="door-pairs">`,
+    pair(
+      device.question,
+      `${copy(device.answer)}<a href="${SOURCE_URL}">${escape(device.link)}</a>.`,
+    ),
+    pair(files.question, copy(files.answer)),
+    pair(reads.question, copy(reads.answer)),
+    pair(inside.question, copy(inside.answer)),
+    pair(keyboard.question, withKeys(copy(keyboard.answer))),
+    `</div>`,
+    `</section>`,
+  ].join("");
+}
+
+/** The close of the page, and its footer. */
+function close(): string {
+  return [
+    `<section id="door-close" aria-labelledby="door-close-h">`,
+    `<h2 id="door-close-h">${escape(door.close)}</h2>`,
+    `<div id="door-close-buttons"></div>`,
+    `</section>`,
+    `<div id="door-foot">`,
+    `<p>${escape(door.footer)} <a href="${SOURCE_URL}">${escape(door.footerSource)}</a>.</p>`,
+    `</div>`,
+  ].join("");
+}
+
+/** The title of the home page. */
+export const HOME_TITLE = "Zip viewer in your browser: no upload, huge archives | Zipscope";
+/** The meta description of the home page. */
+export const HOME_DESCRIPTION =
+  "See what is in a zip, jar, apk, whl, vsix or docx file and where the space went. Zipscope lists a million entries in about a second, in your browser. No upload.";
+
+/** Returns the head tags of the page. With no origin, the build is a preview
+ *  or a local build, so the page gets a tag that keeps search engines from
+ *  indexing it, and no tag that needs the origin. */
+export function headTags(
+  origin: string | undefined,
+): { tag: string; attrs?: Record<string, string>; children?: string }[] {
+  const title = HOME_TITLE;
+  const description = HOME_DESCRIPTION;
+  const tags: { tag: string; attrs?: Record<string, string>; children?: string }[] = [
+    { tag: "title", children: title },
+    { tag: "meta", attrs: { name: "description", content: description } },
+    { tag: "meta", attrs: { property: "og:type", content: "website" } },
+    { tag: "meta", attrs: { property: "og:site_name", content: "Zipscope" } },
+    { tag: "meta", attrs: { property: "og:title", content: title } },
+    { tag: "meta", attrs: { property: "og:description", content: description } },
+    { tag: "meta", attrs: { name: "twitter:card", content: "summary_large_image" } },
+  ];
+  const base = origin?.replace(/\/+$/, "");
+  if (base === undefined || base === "") {
+    return [...tags, { tag: "meta", attrs: { name: "robots", content: "noindex" } }];
+  }
+  const url = `${base}/`;
+  tags.push(
+    { tag: "link", attrs: { rel: "canonical", href: url } },
+    { tag: "meta", attrs: { property: "og:url", content: url } },
+    { tag: "meta", attrs: { property: "og:image", content: `${base}/og.png` } },
+  );
+  // A data block: the browser does not run it, so the CSP does not apply.
+  const app = {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: "Zipscope",
+    url,
+    description,
+    applicationCategory: "DeveloperApplication",
+    operatingSystem: "Any",
+    browserRequirements: "Chrome 125, Firefox 147, Safari 26 or a later version",
+    isAccessibleForFree: true,
+    offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+    license: "https://opensource.org/license/mit",
+  };
+  tags.push({
+    tag: "script",
+    attrs: { type: "application/ld+json" },
+    children: JSON.stringify(app).replace(/</g, "\\u003c"),
+  });
+  return tags;
+}
+
+/** Returns `sitemap.xml` and `robots.txt` for the origin. */
+export function crawlFiles(origin: string): { sitemap: string; robots: string } {
+  const base = origin.replace(/\/+$/, "");
+  return {
+    sitemap: [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+      `  <url><loc>${base}/</loc></url>`,
+      "</urlset>",
+      "",
+    ].join("\n"),
+    robots: `User-agent: *\nAllow: /\n\nSitemap: ${base}/sitemap.xml\n`,
+  };
+}
+
+/** Returns the HTML in the place of the root element: the root element, and
+ *  then the frame of the static page. */
 export function doorHtml(): string {
   return [
-    `<h1 id="${DOOR_IDS.heading}">${escape(door.heading)}</h1>`,
     `<div id="root"></div>`,
     `<div id="${DOOR_IDS.frame}">`,
-    `<div id="door-top"><span id="door-mark">Zipscope</span><span id="${DOOR_IDS.tagline}">${escape(door.tagline)}</span></div>`,
-    `<main id="door-work"><div id="${DOOR_IDS.page}">`,
-    questions(),
-    actionRow(),
-    // The slot of the recent archives. The app fills it when the browser
-    // keeps file handles.
+    `<div id="door-top"><a id="door-mark" href="/">Zipscope</a><span id="${DOOR_IDS.tagline}">${escape(door.barNote)}</span></div>`,
+    `<main id="door-work">`,
+    heading(),
+    `<div id="${DOOR_IDS.page}">`,
+    hero(),
     `<div id="door-recent"></div>`,
-    rest(),
+    bands(),
+    questions(),
+    close(),
     `</div></main>`,
     `<div id="door-margin"></div>`,
     `</div>`,

@@ -59,7 +59,7 @@ test("the offline line shows only after the preload", async ({ page }) => {
   });
   await page.goto("/");
   const door = page.locator("#front-door");
-  await expect(page.locator("#door-questions")).toBeVisible();
+  await expect(page.locator("#door-bands")).toBeVisible();
   await expect(door).toHaveAttribute("data-preloaded", "pending");
   await expect(page.locator("#front-test")).toBeHidden();
   gate.resolve();

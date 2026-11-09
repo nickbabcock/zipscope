@@ -1,9 +1,10 @@
-// The front door: the empty state at `/`. On a first visit it is the static
-// page from `index.html` (see `door-static.ts`): three questions, each with
-// its answer for the sample archive, a sticky row of actions, and more
-// questions below the fold. This component moves the static page into the work
-// area and draws its controls in the reserved slots. A drop or the sample
-// archive turns the work area into the tool, with no navigation.
+// The front door: the empty state at `/`. On a first
+// visit it is the static page from the served HTML (see `door-static.ts`): the
+// word mark, the row of actions, a picture of the tool on the sample archive,
+// five bands about what Zipscope does, and questions below them. This
+// component moves the static page into the work area and draws its controls
+// in the reserved slots. A drop or the sample archive turns the work area into
+// the tool, with no navigation.
 //
 // Other states:
 // - Back from the first entry of an open archive: "Return to name.zip".
@@ -166,7 +167,7 @@ export function FrontDoor(props: FrontDoorProps) {
     <button
       id={`see-${answer}`}
       type="button"
-      aria-label={front.seeNames[answer]}
+      aria-label={answer === "contents" ? undefined : front.seeNames[answer]}
       aria-busy={props.sampleUse === answer ? "true" : undefined}
       onClick={() => props.onSample(answer)}
       {...stylex.attrs(
@@ -175,7 +176,7 @@ export function FrontDoor(props: FrontDoorProps) {
         controls.focusRing,
       )}
     >
-      {front.see}
+      {answer === "contents" ? front.openSample : front.see}
     </button>
   );
 
@@ -275,6 +276,21 @@ export function FrontDoor(props: FrontDoorProps) {
     },
   );
 
+  /** The picture of the tool on the sample archive. It opens the sample at
+   *  the preview of the space hog, as the picture shows it. */
+  const shotButton = (picture: Element) => (
+    <button
+      id="door-shot-button"
+      type="button"
+      aria-label={front.shotName}
+      aria-busy={props.sampleUse === "preview" ? "true" : undefined}
+      onClick={() => props.onSample("preview")}
+      {...stylex.attrs(styles.shot, controls.focusRing)}
+    >
+      {picture}
+    </button>
+  );
+
   /** The owner of the door. A `ref` runs with no owner, and the controls that
    *  it draws must go with the door. */
   const owner = getOwner();
@@ -286,10 +302,13 @@ export function FrontDoor(props: FrontDoorProps) {
       staticPage.querySelector(`#${id}`)?.replaceChildren(...(nodes as Node[]));
     runWithOwner(owner, () => {
       fill("door-see-contents", seeIt("contents"));
-      fill("door-see-space", seeIt("space"));
+      fill("door-see-preview", seeIt("preview"));
       fill("door-see-health", seeIt("health"));
       fill("door-buttons", openButton(true, "front-open"), sampleButton());
+      fill("door-close-buttons", openButton(true, "close-open"));
       fill("door-recent", recentList());
+      const picture = staticPage.querySelector("#door-shot picture");
+      if (picture !== null) fill("door-shot", shotButton(picture));
     });
     slot.append(staticPage);
   };
@@ -465,11 +484,21 @@ const styles = stylex.create({
   /** On a phone the two buttons share the row, so it has one edge. */
   action: {
     flexGrow: { default: 0, [NARROW]: 1 },
-    fontSize: textSize.title,
-    // A touch screen gets 44 px buttons.
-    height: { default: 36, [COARSE]: 44 },
+    fontSize: textSize.lead,
+    // The buttons of the door are 44 px high, also for a mouse.
+    height: 44,
     justifyContent: "center",
     paddingInline: 14,
+  },
+  /** The picture is the control: no fill and no edge of a button. */
+  shot: {
+    backgroundColor: "transparent",
+    borderRadius: 8,
+    borderStyle: "none",
+    cursor: { default: "pointer", ":is([aria-busy])": "progress" },
+    display: "block",
+    padding: 0,
+    width: "100%",
   },
   sampleRest: {
     display: { default: "inline", [TINY]: "none" },
