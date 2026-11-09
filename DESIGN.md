@@ -175,6 +175,9 @@ characters.
 - The return and reopen doors are at the top, on the axis of the poster, with
   the display face for the heading. Their buttons say what they do ("Reopen
   name.zip", "Open another file").
+- The reopen door shows only when "Reopen" does more than the file picker:
+  for the demo, or where the browser keeps file handles. Else the first door
+  shows, and "Open a file" restores the location of the same archive.
 - On each door state the map margin takes the ground and no rule. It keeps
   its height.
 
