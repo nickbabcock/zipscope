@@ -110,7 +110,7 @@ export const door = {
     figure: "100\u00a0ms",
     unit: "to the first rows, for a 100\u00a0GB file or 1,000,000 entries",
     heading: "Even the largest zips open at once.",
-    body: "You do not wait for the whole list. Scroll, sort and search while the rest of it fills in.",
+    body: "Scroll, sort and search right away.",
     note: "Measured in Chromium on a desktop computer: about 70\u00a0ms for a 100\u00a0GB file, and about 100\u00a0ms to the first rows and 1.0\u00a0s to the full list for 1,000,000 entries.",
   },
   local: {
