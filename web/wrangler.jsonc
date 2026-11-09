@@ -2,7 +2,7 @@
 // The Cloudflare Vite plugin reads this file. It applies `public/_headers`
 // in build, preview and deploy.
 //
-// The CI deploy job (`.github/workflows/ci.yml`) deploys `main` to the custom
+// The CI deploy jobs (`.github/workflows/ci.yml`) deploy `main` to the custom
 // domain, and uploads each pull request as a version with a preview alias,
 // `pr-<number>-zipscope.<subdomain>.workers.dev`. Preview URLs need the
 // workers.dev subdomain.
