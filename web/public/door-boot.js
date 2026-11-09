@@ -10,7 +10,14 @@
   if (
     location.hash.indexOf("#handoff=") === 0 ||
     location.search === "?launch" ||
-    (state && state.zipscope === 1 && state.session && state.name)
+    // An archive that opens again with no file picker: the demo, or a file
+    // whose handle the browser can keep. Else the first door shows (see
+    // the door state in `App.tsx`).
+    (state &&
+      state.zipscope === 1 &&
+      state.session &&
+      state.name &&
+      (state.demo || typeof window.showOpenFilePicker === "function"))
   ) {
     root.dataset.door = "resume";
   }

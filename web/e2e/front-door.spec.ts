@@ -975,9 +975,6 @@ test("a broken storage does not stop the door", async ({ page }) => {
 test("the boot script hides the questions before the first paint after a reload", async ({
   page,
 }) => {
-  await page.addInitScript(() => {
-    Object.defineProperty(window, "showOpenFilePicker", { value: undefined, configurable: true });
-  });
   await openSmall(page);
   // Hold the entry module, so only the boot script and the CSS apply.
   await page.route("**/assets/index-*.js", () => {});
@@ -1048,30 +1045,6 @@ test("after Back, the door has Return and Open a file", async ({ page }) => {
   await page.locator("#return-button").click();
   await expect(frontDoor).toHaveCount(0);
   await expect(page.locator("header h1")).toHaveText("Zipscope");
-});
-
-test("after a reload, the door offers to reopen the file", async ({ page }) => {
-  // Without the File System Access picker (as in Firefox and Safari), the
-  // reopen action opens the file input. reload.spec.ts has the picker.
-  await page.addInitScript(() => {
-    Object.defineProperty(window, "showOpenFilePicker", { value: undefined, configurable: true });
-  });
-  await openSmall(page);
-  await page.reload();
-  await expect(page.locator("#front-door")).toHaveAttribute("data-state", "reopen");
-  await expect(page.locator("#reopen-text")).toHaveText(front.reopen);
-  await expect(page.locator("#reopen-why")).toHaveText(front.reopenWhy);
-  await expect(page.locator("#reopen-button")).toHaveText(front.reopenName("small.zip"));
-  await expect(page.locator("#other-open")).toHaveText(front.openOther);
-  await expect(page.locator("header")).toBeHidden();
-  await expect(page.locator("#door-hero")).toHaveCount(0);
-  await expect(page.locator("#explainer")).toHaveCount(0);
-  // The reopen action opens the file picker.
-  const chooser = page.waitForEvent("filechooser");
-  await page.locator("#reopen-button").click();
-  await (await chooser).setFiles(test.info().outputPath("small.zip"));
-  expect((await waitForOutcome(page)).outcome).toBe("complete");
-  await expect(page.locator("#archive-name")).toHaveText("small.zip");
 });
 
 test("after a reload of the demo, the reopen action makes the demo again", async ({ page }) => {
