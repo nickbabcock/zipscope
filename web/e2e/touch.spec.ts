@@ -52,7 +52,7 @@ async function openStored(page: Page, entries: [string, number][]) {
 
 async function openSample(page: Page) {
   await page.goto("/");
-  await page.locator("#sample-button").click();
+  await page.locator("#door-shot-button").click();
   await waitForOutcome(page);
 }
 
@@ -201,10 +201,8 @@ test.describe("a coarse pointer", () => {
 
   test("gets larger targets in the menus, the strips and the front door", async ({ page }) => {
     await page.goto("/");
-    for (const id of ["front-open", "sample-button"]) {
-      expect((await box(page.locator(`#${id}`))).height, id).toBe(44);
-    }
-    await page.locator("#sample-button").click();
+    expect((await box(page.locator("#front-open"))).height).toBe(44);
+    await page.locator("#door-shot-button").click();
     await waitForOutcome(page);
     expect((await box(page.locator("#drawer-button"))).height).toBe(36);
 
@@ -316,10 +314,10 @@ test("a fine pointer keeps the dense layout", async ({ page }) => {
   await page.setViewportSize({ width: 700, height: 900 });
   await page.goto("/");
   expect(await page.evaluate(() => matchMedia("(pointer: fine)").matches)).toBe(true);
-  for (const id of ["front-open", "sample-button"]) {
-    expect((await box(page.locator(`#${id}`))).height, id).toBe(36);
-  }
-  await page.locator("#sample-button").click();
+  // The buttons of the front door are 44 px high for each pointer: they are
+  // the main action of the page, not a control of the dense tool.
+  expect((await box(page.locator("#front-open"))).height).toBe(44);
+  await page.locator("#door-shot-button").click();
   await waitForOutcome(page);
   const share = tableRow(page, "share/");
   expect((await box(share)).height).toBe(24);

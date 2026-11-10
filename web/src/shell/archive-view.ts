@@ -101,7 +101,7 @@ export function createArchiveView(
     listedSort();
     return untrack(sortChosen) ? ++chosenOrders : chosenOrders;
   });
-  const [healthOpen, setHealthOpen] = createSignal(reveal === "health");
+  const [healthOpen, setHealthOpen] = createSignal(false);
   /** True while the worker ends the default sort after the parse. */
   const [settling, setSettling] = createSignal(false);
   /** The request that took longer than `STATUS_DELAY_MS`, so a short one

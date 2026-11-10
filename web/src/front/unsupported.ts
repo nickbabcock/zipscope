@@ -65,11 +65,9 @@ export function renderUnsupported(root: HTMLElement, reason: Exclude<Support, "o
   section.append(lede);
   door.append(section);
 
-  // The rest of the page stays, as answers that a visitor can read. The word
-  // mark is the `h1` of this page, so the hidden heading goes.
-  const { rest } = takeDoor();
+  // The static page goes. The word mark is the `h1` of this page.
+  takeDoor();
   document.documentElement.dataset.door = "unsupported";
-  if (rest !== null) door.append(rest);
 
   // The isolation check of the e2e tests reads this element.
   const isolated = document.createElement("span");

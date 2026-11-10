@@ -5,13 +5,6 @@
 // A word in backticks is data: the HTML shows it in the mono font. A number in
 // double stars leads its answer: the HTML shows it in a heavier weight.
 
-/** The source code of Zipscope. */
-export const SOURCE_URL = "https://github.com/nickbabcock/zipscope";
-
-/** The flag of the compact door in `localStorage`. It holds no file name.
- *  `public/door-boot.js` reads the same key. */
-export const DOOR_FLAG_KEY = "zipscope.door";
-
 /**
  * Adds the offline line to the answer about the device. The line is true
  * only because the front door preloads the workers and the wasm, and the
@@ -24,17 +17,9 @@ export const front = {
   /** The line that the script adds after the preload. */
   test: "Load this page, disconnect, then open a file. Zipscope still works.",
   open: "Open a file",
-  sample: "Try a sample archive",
   /** The first part of `sample`. Below 380 px only this part shows. */
-  sampleShort: "Try a sample",
-  /** The text at the end of each answer. */
-  see: "See it",
-  /** The accessible names of the "See it" controls. */
-  seeNames: {
-    contents: "See it: what is in the sample archive",
-    space: "See it: where the space of the sample archive went",
-    health: "See it: the health of the sample archive",
-  },
+  /** The accessible name of the picture of the tool. It opens the sample. */
+  shotName: "Open the sample archive in Zipscope",
   /** The map margin while the device makes the sample. */
   making: "Making the sample archive on this device.",
   /** The map margin when the sample cannot open. */
@@ -54,19 +39,18 @@ export const front = {
   returnTo: (name: string) => `Return to ${name}`,
   reopen: "Reopen the file to continue",
   /** Below the reopen heading: why the file must open again. */
-  reopenWhy: "The browser does not keep access to a file after a reload.",
-  /** The remembered location below the reopen action. */
-  reopenPath: (path: string) => `Last folder: ${path}`,
-  /** The accessible name of the archive button of the reopen door. */
+  reopenWhy: "Open the file again to continue where you stopped.",
+  /** The label of the archive button of the reopen door. */
   reopenName: (name: string) => `Reopen ${name}`,
-  reopenSearch: (query: string) => `Last search: “${query}”`,
+  /** The second button of the return and reopen doors. */
+  openOther: "Open another file",
   /** The kept handle did not give the file: the permission was refused, or
    *  the file is gone. The text is correct for the two cases. The next
    *  click opens the file picker. */
   reopenRefused: "Zipscope cannot read the kept file. Click again to choose it.",
 
-  /** The list of recent archives on the front door (Chromium). */
-  recentQuestion: "Open a recent archive?",
+  /** The label of the recent archives on the front door (Chromium). */
+  recentHeading: "Recent archives",
   /** What the list keeps. The Clear control follows it. */
   recentNote: "The names of the archives that you open stay in this browser.",
   recentClear: "Clear",
@@ -88,113 +72,64 @@ export const front = {
 
 /** The copy of the served HTML. */
 export const door = {
-  heading: "Zipscope: a zip viewer that answers three questions about your file",
-  /** Beside the word mark: what Zipscope is. */
+  /** The visible `h1`: the word mark, then what Zipscope is. */
+  mark: "Zipscope",
   tagline: "A zip viewer in your browser.",
-  /** One line above all three answers. */
-  demoLabel: "These answers are for a sample archive, `demo-app-2.4.0-release.zip`.",
-  /** Hidden text at the start of each answer, so a visitor who jumps to a
-   *  heading hears that the answer is for the sample. */
-  samplePrefix: "In the sample archive: ",
-  contents: {
-    question: "What is in this zip?",
-    answer: "**879 entries** in five folders: `bin`, `lib`, `debug`, `config` and `share`.",
-  },
-  space: {
-    question: "Where did the space go?",
-    answer: "`debug/demo-app.debug` is **12.0\u00a0MiB** of the 18.8\u00a0MiB.",
-    share: "64%",
-    /** The accessible name of the bar. */
-    shareName: "64% of the unpacked size",
-    /** Real rows of the sample, as the tool lists them. A unit test computes
-     *  each value from the sample. `share` is the percent of the unpacked
-     *  size, for the bar. */
-    rowsLabel: "Largest folders",
-    rows: [
-      { name: "debug/", size: "12.2\u00a0MiB", share: 65 },
-      { name: "share/", size: "4.6\u00a0MiB", share: 25 },
-      { name: "bin/", size: "1.1\u00a0MiB", share: 6 },
-    ],
-  },
-  health: {
-    question: "Is it healthy?",
-    counts: "1 warning, 1 notice.",
-    answer: "One name is in the archive twice, and **3.0\u00a0KiB** of data is after the end.",
-  },
+  lead: "See what is in a zip file and where the space went. You do not unpack it or upload it.",
+  /** The line below the picture of the tool: the file types it opens. */
+  opens:
+    "Opens any zip file, such as a jar, apk, whl, ipa, vsix or docx file. It does not open 7z, rar or tar files.",
+  /** The line below the picture of the tool. */
+  shotLabel: "The sample archive in Zipscope. Select the picture to explore it.",
+  /** The text equivalent of the picture of the tool. */
+  shotAlt:
+    "Zipscope with the sample archive open: a folder tree with sizes, a table of the largest files with demo-app.debug selected at 12.0 MiB, a warning that one entry has the same name as another entry, and a hex preview of the selected file.",
   action: {
-    fine: "Drop your zip, jar, apk, whl, vsix or docx here to get these answers.",
-    coarse: "Open your zip, jar, apk, whl, vsix or docx to get these answers.",
-    dragging: "Drop the file to get its answers.",
-    compact: "Drop a zip anywhere on this page.",
+    fine: "or drop a file anywhere on this page.",
+    coarse: "Choose a file on this device. It stays on this device.",
+    dragging: "Drop the file to open it.",
   },
   noScript: "Zipscope needs JavaScript and WebAssembly to read a file.",
-  /** The key names in the keyboard answer. The HTML shows each one as a key
-   *  hint (`<kbd>`). */
-  keys: ["Enter", "Space", "Escape", "Backspace", "/"],
-  files: {
-    question: "Which files does it open?",
-    answer:
-      "Zipscope is a zip viewer for the zip family: .zip, .jar, .apk, .docx, .whl, .vsix and .ipa files, because all of them are zip files. Also zip64 archives larger than 4\u00a0GiB. It does not open 7z, rar or tar files.",
+  /** The five bands. Each `figure` is a measured value or a real value of
+   *  the sample archive. */
+  fast: {
+    figure: "100\u00a0ms",
+    unit: "to the first rows, for a 100\u00a0GB file or 1,000,000 entries",
+    heading: "Even the largest zips open at once.",
+    body: "Scroll, sort and search immediately.",
+    note: "Measured in Chromium on a desktop computer: about 70\u00a0ms for a 100\u00a0GB file, and about 100\u00a0ms to the first rows and 1.0\u00a0s to the full list for 1,000,000 entries.",
   },
-  reads: {
-    question: "How does it read a large archive?",
-    answer:
-      "Zipscope reads the central directory: the list of entries at the end of the file. It does not unpack the archive to list it. `unzip -l` prints the same list with one total, so it does not tell you which folder takes the space. The list fills in as it reads, so you can scroll, search and sort before it ends. At a memory limit, it stops and asks before it goes on.",
+  local: {
+    figure: "0\u00a0bytes",
+    unit: "of your file uploaded",
+    heading: "Your file stays on your device.",
+    body: "Zipscope is a static site. It has no server that can receive a file, and the page can connect only to its own site. After one visit, it works offline too.",
+    note: "When you save a file to your disk, your browser can check it, as it does for each download.",
   },
-  lies: {
-    question: "What if the archive lies?",
-    answer:
-      "Zipscope does not trust what an archive says about itself. It tells you what it found, for example duplicate names, entries that overlap, and data before or after the entries.",
+  preview: {
+    heading: "Look inside before you extract.",
+    body: "Select a file to see its picture, its text or its bytes. Zipscope writes nothing to your disk.",
+    /** The text equivalent of the picture of the preview. */
+    shotAlt:
+      "The preview of Zipscope with the icon of the sample app open: a blue tile with three white layers, beside the list of its folder.",
   },
-  inside: {
-    question: "Can I look inside a file?",
-    answer:
-      "Yes. The preview shows stored, Deflate and Zstandard entries. You can extract a file or a folder to your disk. Encrypted entries are listed and labeled, but Zipscope does not decrypt them.",
+  health: {
+    counts: "1 warning, 1 notice",
+    heading: "It does not trust the archive.",
+    body: "Zipscope checks what the archive says about itself. It tells you about duplicate names, entries that overlap, data before or after the entries, zip bombs, and names with hidden characters.",
+    sample:
+      "In the sample archive: one name is in the archive twice, and 3.0\u00a0KiB of data is after the end.",
   },
-  device: {
-    question: "Does my file leave this device?",
-    answer:
-      "No. Zipscope is a static site, with no server that can receive a file. The page reads the file in your browser, and its Content Security Policy (`default-src 'self'`) lets it connect only to its own origin. When you save a file to your disk, your browser’s own download check may send its name, hash and other details to a service such as Google Safe Browsing, as it does for other downloads. The page loads no third-party scripts. The source code is MIT licensed, so you can examine this: ",
-    link: "github.com/nickbabcock/zipscope",
+  save: {
+    figure: "zstd",
+    unit: "a copy of the archive, each entry checked",
+    from: "demo-app-2.4.0-release.zip",
+    to: "demo-app-2.4.0-release-zstd.zip",
+    heading: "Take files out, or repack them all.",
+    body: "Save one file or a whole folder to your disk. Or save a copy of the archive with Zstandard compression. Zipscope checks each entry before it goes into the copy.",
+    note: "Many unzip tools cannot open Zstandard entries.",
   },
-  keyboard: {
-    question: "Can I use only the keyboard?",
-    answer:
-      "Yes. The arrow keys move in the tree and in the table. Enter opens a folder or the preview of a file, Space shows or hides the preview, Escape closes it, and Backspace goes up one folder. / moves to the search field, and Escape clears it.",
-  },
-  /** One answer for each file type, for search. Each claim was checked against
-   *  a real file of the type. */
-  formats: [
-    {
-      question: "What is in a .jar file?",
-      answer:
-        "A Java archive holds compiled `.class` files, resources and `META-INF/MANIFEST.MF`. A fat or shaded jar also holds its dependencies, so look in the package folders for a library that you did not expect.",
-    },
-    {
-      question: "What is in an .apk file?",
-      answer:
-        "An Android package holds `AndroidManifest.xml`, `classes.dex`, `resources.arsc` and `res/`. Many also hold `assets/` and native libraries in `lib/`, one folder for each processor type. Check `lib/` for a processor type that your users do not need.",
-    },
-    {
-      question: "What is in a .whl file?",
-      answer:
-        "A Python wheel holds the package folders and a `.dist-info` folder. Open it to see what `pip install` puts on a machine, and whether the tests or large data files shipped.",
-    },
-    {
-      question: "What is in a .vsix file?",
-      answer:
-        "A Visual Studio Code extension holds an `extension/` folder, `extension.vsixmanifest` and `[Content_Types].xml`. Did `node_modules` ship in this extension? Look in `extension/`, and look for source maps too.",
-    },
-    {
-      question: "What is in a .docx file?",
-      answer:
-        "A Word document holds XML in `word/`, and each embedded picture in `word/media/`. Sort by size to see which picture makes the document large.",
-    },
-    {
-      question: "What is in an .ipa file?",
-      answer:
-        "An iOS app holds a `Payload/` folder with the app folder in it. That folder has the executable and the resources. Check `Frameworks/` and `PlugIns/` to see which of them makes the app large.",
-    },
-  ],
   close: "What is in your zip?",
+  /** The footer. */
+  footer: "Zipscope is free and open source, under the MIT license.",
 } as const;

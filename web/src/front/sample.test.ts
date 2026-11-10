@@ -8,6 +8,7 @@ import {
   SAMPLE_DUPLICATE,
   SAMPLE_HOG,
   SAMPLE_NAME,
+  SAMPLE_PICTURE,
   SAMPLE_TRAILER_BYTES,
   sampleEntries,
 } from "./sample";
@@ -19,6 +20,11 @@ vi.mock("comlink", () => ({ expose: mocks.expose }));
 
 test("the CRC-32 agrees with the standard check value", () => {
   expect(crc32(new TextEncoder().encode("123456789"))).toBe(0xcbf43926);
+});
+
+test("the picture of the sample is an SVG", () => {
+  const entry = sampleEntries().find((next) => next.name === SAMPLE_PICTURE)!;
+  expect(new TextDecoder().decode(entry.data)).toMatch(/^<svg /);
 });
 
 test("the sample is the same each time", () => {
@@ -77,6 +83,6 @@ test("the parser finds the duplicate name and the data after the end", async () 
   expect(found.map((finding) => finding.id).sort()).toEqual(["duplicate-names", "epilogue"]);
   expect(found.every((finding) => finding.severity !== "error")).toBe(true);
   // The answer of the first view says the same as the tool.
-  expect(`${severityCounts(found)}.`).toBe(door.health.counts);
+  expect(severityCounts(found)).toBe(door.health.counts);
   vi.unstubAllGlobals();
 });

@@ -2,9 +2,10 @@
 // and shows the remembered location. A kept file handle reopens the file
 // with no picker (the origin private file system gives handles with the
 // read permission, so the test sees no prompt). A matching archive gets
-// its location back; a different file starts at its root. Without the
-// File System Access picker (as in Firefox and Safari), the reopen action
-// opens the file input.
+// its location back; a different file starts at its root. A browser with
+// no File System Access picker (Firefox, Safari) cannot keep a file
+// handle: it gets the first door, and "Open a file" restores the location
+// of the same archive.
 import { writeFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
@@ -81,8 +82,10 @@ test("a kept handle reopens the file with no picker and restores the folder", as
   const door = page.locator("#front-door");
   await expect(door).toHaveAttribute("data-state", "reopen");
   await expect(page.locator("#reopen-text")).toHaveText(front.reopen);
-  await expect(page.locator("#reopen-button")).toHaveText("nav.zip");
-  await expect(page.locator("#reopen-path")).toHaveText(front.reopenPath("app/src/main"));
+  await expect(page.locator("#reopen-why")).toHaveText(front.reopenWhy);
+  await expect(page.locator("#reopen-button")).toHaveText(front.reopenName("nav.zip"));
+  await expect(page.locator("#other-open")).toHaveText(front.openOther);
+  await expect(page.locator("header")).toBeHidden();
   await page.locator("#reopen-button").click();
   expect((await waitForOutcome(page)).outcome).toBe("complete");
   await expect.poll(() => crumbs(page)).toEqual(["nav.zip", "/app", "/src/main"]);
@@ -188,7 +191,11 @@ test("a different file with the same name starts at its root", async ({ page }) 
   await expect.poll(() => crumbs(page)).toEqual(["nav.zip"]);
 });
 
-test("without the picker, reopen opens the file input and restores a match", async ({ page }) => {
+test("without the picker, a reload shows the first door, and Open restores a match", async ({
+  page,
+}) => {
+  // As in Firefox and Safari: the browser cannot keep a file handle, so a
+  // reopen door would have two buttons that both open the file picker.
   await page.addInitScript(() => {
     Object.defineProperty(window, "showOpenFilePicker", { value: undefined, configurable: true });
   });
@@ -207,10 +214,12 @@ test("without the picker, reopen opens the file input and restores a match", asy
   await expect(page.locator("#location")).toBeVisible();
   await expect.poll(async () => (await entry(page)).query).toBe("guide");
   await page.reload();
-  await expect(page.locator("#reopen-path")).toHaveText(front.reopenPath("docs"));
-  await expect(page.locator("#reopen-search")).toHaveText(front.reopenSearch("guide"));
+  await expect(page.locator("#front-door")).toHaveAttribute("data-state", "first");
+  await expect(page.locator("html")).toHaveAttribute("data-door", "first");
+  await expect(page.locator("#door-bands")).toBeVisible();
+  await expect(page.locator("#reopen-button")).toHaveCount(0);
   const again = page.waitForEvent("filechooser");
-  await page.locator("#reopen-button").click();
+  await page.locator("#front-open").click();
   await (await again).setFiles(path);
   expect((await waitForOutcome(page)).outcome).toBe("complete");
   await expect(page.locator("#search-input")).toHaveValue("guide");

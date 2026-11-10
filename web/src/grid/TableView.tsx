@@ -104,9 +104,6 @@ export interface TableViewProps {
   /** True when a control of the front door opened this archive. The table
    *  takes the focus on its first frame with rows, with no selected row. */
   revealFocus?: boolean;
-  /** The full name of a file to select when it shows in the largest files
-   *  below the listing. */
-  revealFile?: string;
   /** Space: shows or hides the preview. */
   onTogglePreview: (name: string | undefined, row: number | undefined) => void;
   /** Escape: closes the preview. */
@@ -1159,23 +1156,6 @@ export function TableView(props: TableViewProps) {
      *  row of the largest files (a file can also be a row of the
      *  listing). */
     let selected: { item: number; index: number; block: boolean } | undefined;
-    /** The file that waits to show in the largest files. */
-    let revealFile = props.revealFile;
-    /** The folder of the revealed file, while its row of the largest files can
-     *  still go. */
-    let revealFolder: string | undefined;
-    /** Selects the row of a listed folder, with no move of the focus. */
-    const selectFolder = (views: ViewSet, name: string | undefined, rows: number) => {
-      for (let index = 0; index < views.permutation.length; index++) {
-        const item = views.permutation[index]!;
-        if (isFolder(item) && reader.folderName(folderId(item)) === name) {
-          selected = { item, index, block: false };
-          pool.reveal(index, rows);
-          return;
-        }
-      }
-      selected = undefined;
-    };
     /** True until the first frame with rows takes the focus. */
     let takeFocus = props.revealFocus === true;
     /** True from Enter in the search field to the next key of the grid. */
@@ -1559,44 +1539,6 @@ export function TableView(props: TableViewProps) {
               viewport.dataset.firstRing = "";
               viewport.focus({ preventScroll: true, focusVisible: true });
               focusWithNoRow = false;
-            }
-          }
-          if (revealFile !== undefined && table !== undefined && table.label >= 0) {
-            for (let index = 0; index < table.files.length; index++) {
-              const file = table.files[index]!;
-              if (file < frame.visible && reader.name(file) === revealFile) {
-                selected = { item: file, index: table.label + 1 + index, block: true };
-                props.onSelect(revealFile, file);
-                revealFolder = revealFile.split("/").at(-2);
-                break;
-              }
-            }
-            revealFile = undefined;
-          } else if (
-            revealFile !== undefined &&
-            views !== undefined &&
-            parseDone &&
-            views.largestFiles.length > 0
-          ) {
-            // The window has no room for the largest files: the folder of the
-            // file is the answer.
-            selectFolder(views, revealFile.split("/").at(-2), rows);
-            revealFile = undefined;
-          } else if (revealFolder !== undefined) {
-            // The health strip can come after the largest files and take their
-            // room. Then the folder of the file takes the selection.
-            // The hidden tool has no height, so it has no block either, and that
-            // says nothing about the room.
-            if (selected?.block !== true) {
-              revealFolder = undefined;
-            } else if (
-              viewport.clientHeight > 0 &&
-              views !== undefined &&
-              table !== undefined &&
-              table.label < 0
-            ) {
-              selectFolder(views, revealFolder, rows);
-              revealFolder = undefined;
             }
           }
           if (next !== key) {

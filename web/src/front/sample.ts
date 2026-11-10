@@ -12,11 +12,29 @@ import {
   SAMPLE_DUPLICATE,
   SAMPLE_HOG,
   SAMPLE_NAME,
+  SAMPLE_PICTURE,
   SAMPLE_ROOT as ROOT,
   SAMPLE_TRAILER_BYTES,
 } from "./sample-names";
 
-export { SAMPLE_DUPLICATE, SAMPLE_HOG, SAMPLE_NAME, SAMPLE_TRAILER_BYTES };
+export { SAMPLE_DUPLICATE, SAMPLE_HOG, SAMPLE_NAME, SAMPLE_PICTURE, SAMPLE_TRAILER_BYTES };
+
+/** The icon of the demo app: three layers on a blue tile. */
+const APP_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#tile)"/>
+  <g fill="none" stroke="#fff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M128 56 204 96 128 136 52 96Z" fill="#fff"/>
+    <path d="M52 132 128 172 204 132" stroke-opacity="0.8"/>
+    <path d="M52 168 128 208 204 168" stroke-opacity="0.6"/>
+  </g>
+</svg>
+`;
 
 /** A small seeded random number generator (mulberry32). */
 function random(seed: number): () => number {
@@ -159,6 +177,8 @@ export function sampleEntries(seed = 240): ZipEntry[] {
   }
   add("debug/demo-app.debug", c.binary(12 * 1024 * KiB, 0.4));
   add("debug/demo-app-helper.debug", c.binary(240 * KiB, 0.45));
+  // A real picture, so the preview of the sample can show one.
+  add(SAMPLE_PICTURE.slice(ROOT.length + 1), new TextEncoder().encode(APP_ICON));
 
   for (const name of ["app", "logging", "network", "plugins", "search", "storage", "theme"]) {
     add(`config/defaults/${name}.toml`, c.text(c.int(1, 6) * KiB, `# ${name} defaults\n`));

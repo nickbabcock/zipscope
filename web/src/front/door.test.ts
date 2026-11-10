@@ -1,103 +1,82 @@
-// The static front door: its sample numbers and its literal token values. The
-// page states these numbers in the served HTML, so they must agree with the
-// generator. `door.css` copies the token values, because it styles the page
-// before any script runs.
+// The static front door: its sample numbers, its structure, its head tags and
+// its literal token values. The page states
+// these numbers in the served HTML, so they must agree with the generator.
+// `door.css` copies the token values, because it styles the page before any
+// script runs.
 import { expect, test } from "vitest";
 import { formatSize } from "../format";
 // oxlint-disable-next-line import/default -- Vite makes this default export.
 import tokens from "../theme/tokens.stylex.ts?raw";
 import css from "./door.css?raw";
-import { BAR_SLOT } from "../grid/columns";
-import { hasBar } from "../view/model";
-import { doorHtml, originTags } from "./door-static";
-import {
-  SAMPLE_DUPLICATE,
-  SAMPLE_HOG,
-  SAMPLE_NAME,
-  SAMPLE_TRAILER_BYTES,
-  sampleEntries,
-} from "./sample";
-import { SAMPLE_ROOT } from "./sample-names";
+import { crawlFiles, doorHtml, headTags, SHOTS } from "./door-static";
+import { SAMPLE_DUPLICATE, SAMPLE_NAME, SAMPLE_TRAILER_BYTES, sampleEntries } from "./sample";
+import { remuxFileName } from "../remux/text";
 import { door } from "./strings";
 
-test("each sample number in the answers comes from the generator", () => {
+/** The pictures of the door. */
+const pictures = Object.keys(import.meta.glob("../../public/door/*.avif")).map((path) =>
+  path.slice("../../public/door/".length),
+);
+
+test("each sample value of the page comes from the generator", () => {
   const entries = sampleEntries();
-  const total = entries.reduce((sum, entry) => sum + entry.data.length, 0);
-  const hog = entries.find((entry) => entry.name === SAMPLE_HOG)!;
-  const folders = new Set(entries.map((entry) => entry.name.split("/")[1]!));
-
-  expect(door.contents.answer).toContain(`**${entries.length} entries** in five folders`);
-  expect(folders.size).toBe(5);
-  for (const folder of folders) expect(door.contents.answer).toContain(`\`${folder}\``);
-  expect(door.demoLabel).toContain(`\`${SAMPLE_NAME}\``);
-
-  const path = SAMPLE_HOG.slice(SAMPLE_ROOT.length + 1);
-  const share = `${Math.round((hog.data.length / total) * 100)}%`;
-  expect(door.space.answer).toBe(
-    `\`${path}\` is **${formatSize(hog.data.length)}** of the ${formatSize(total)}.`,
-  );
-  expect(door.space.share).toBe(share);
-  expect(door.space.shareName.startsWith(share)).toBe(true);
-  // The bar draws the same share.
-  expect(/#door-bar-fill \{[^}]*\bwidth: (\d+%);/.exec(css)?.[1]).toBe(share);
-
+  expect(door.save.from).toBe(SAMPLE_NAME);
+  expect(door.save.to).toBe(remuxFileName(SAMPLE_NAME));
   expect(entries.filter((entry) => entry.name === SAMPLE_DUPLICATE)).toHaveLength(2);
-  expect(door.health.answer).toContain(`**${formatSize(SAMPLE_TRAILER_BYTES)}** of data`);
+  expect(door.health.sample).toContain(`${formatSize(SAMPLE_TRAILER_BYTES)} of data`);
 });
 
-test("each row of the first view comes from the generator", () => {
-  const entries = sampleEntries();
-  const total = entries.reduce((sum, entry) => sum + entry.data.length, 0);
-  const folders = new Map<string, number>();
-  for (const entry of entries) {
-    const folder = `${entry.name.split("/")[1]!}/`;
-    folders.set(folder, (folders.get(folder) ?? 0) + entry.data.length);
-  }
-  const largest = [...folders].sort((a, b) => b[1] - a[1]);
-  door.space.rows.forEach((row, index) => {
-    const [name, bytes] = largest[index]!;
-    expect(row.name).toBe(name);
-    expect(row.size).toBe(formatSize(bytes));
-    expect(row.share).toBe(Math.round((bytes / total) * 100));
-    // The bar shows only when the tool also draws a bar for this row.
-    expect(doorHtml().includes(`<rect width="${(row.share / 100) * BAR_SLOT}"`)).toBe(
-      hasBar(bytes, total, BAR_SLOT),
-    );
-  });
-});
-
-test("the served HTML has the hidden h1 first and each question as an h2", () => {
+test("the home page has one visible h1, then the bands and the close as h2", () => {
   const html = doorHtml();
-  expect(html.startsWith(`<h1 id="door-h1">${door.heading}</h1>`)).toBe(true);
-  const headings = [...html.matchAll(/<h([1-6])[ >]/g)].map((match) => Number(match[1]));
-  expect(headings[0]).toBe(1);
-  expect(headings.slice(1).every((level) => level === 2)).toBe(true);
-  for (const question of [
-    door.contents.question,
-    door.space.question,
-    door.health.question,
-    door.files.question,
-    door.reads.question,
-    door.lies.question,
-    door.inside.question,
-    door.device.question,
-    door.keyboard.question,
-    ...door.formats.map((format) => format.question),
-    door.close,
-  ]) {
-    expect(html).toContain(`<h2>${question}</h2>`);
+  const levels = [...html.matchAll(/<h([1-6])[ >]/g)].map((match) => Number(match[1]));
+  expect(levels[0]).toBe(1);
+  expect(levels.slice(1).every((level) => level === 2)).toBe(true);
+  for (const band of [door.fast, door.local, door.preview, door.health, door.save]) {
+    expect(html).toContain(`>${band.heading}</h2>`);
   }
+  expect(html).toContain(door.preview.shotAlt);
+  expect(html).toContain(`<span id="door-wordmark">${door.mark}</span>`);
+  expect(html).toContain(door.tagline);
 });
 
-test("the origin gives three head tags, and no origin gives only noindex", () => {
-  const noindex = [{ tag: "meta", attrs: { name: "robots", content: "noindex" } }];
-  expect(originTags(undefined)).toEqual(noindex);
-  expect(originTags("")).toEqual(noindex);
-  expect(originTags("https://zip.nickb.dev/")).toEqual([
-    { tag: "link", attrs: { rel: "canonical", href: "https://zip.nickb.dev/" } },
-    { tag: "meta", attrs: { property: "og:url", content: "https://zip.nickb.dev/" } },
-    { tag: "meta", attrs: { property: "og:image", content: "https://zip.nickb.dev/og.png" } },
-  ]);
+test("each picture of the page is in public/door, in both themes", () => {
+  expect(pictures.sort()).toEqual(
+    Object.keys(SHOTS)
+      .flatMap((name) => [`${name}-dark.avif`, `${name}-light.avif`])
+      .sort(),
+  );
+});
+
+test("no origin gives a noindex tag and no tag that needs the origin", () => {
+  const tags = headTags(undefined);
+  expect(tags).toContainEqual({ tag: "meta", attrs: { name: "robots", content: "noindex" } });
+  expect(tags.some((tag) => tag.attrs?.rel === "canonical")).toBe(false);
+  expect(tags.some((tag) => tag.attrs?.property === "og:url")).toBe(false);
+  expect(tags.some((tag) => tag.tag === "script")).toBe(false);
+  expect(headTags("")).toEqual(tags);
+});
+
+test("the origin gives the canonical URL and the data block", () => {
+  const home = headTags("https://zip.nickb.dev/");
+  expect(home).toContainEqual({
+    tag: "link",
+    attrs: { rel: "canonical", href: "https://zip.nickb.dev/" },
+  });
+  expect(home).toContainEqual({
+    tag: "meta",
+    attrs: { property: "og:image", content: "https://zip.nickb.dev/og.png" },
+  });
+  const data = home.find((tag) => tag.tag === "script")!;
+  expect(data.attrs).toEqual({ type: "application/ld+json" });
+  expect(JSON.parse(data.children!)).toMatchObject({ "@type": "WebApplication", name: "Zipscope" });
+  expect(home.some((tag) => tag.attrs?.name === "robots")).toBe(false);
+});
+
+test("the sitemap lists the page, and robots.txt points to it", () => {
+  const { sitemap, robots } = crawlFiles("https://zip.nickb.dev/");
+  expect(sitemap.match(/<loc>/g)).toHaveLength(1);
+  expect(sitemap).toContain("<loc>https://zip.nickb.dev/</loc>");
+  expect(robots).toContain("Sitemap: https://zip.nickb.dev/sitemap.xml");
 });
 
 /** Reads a token of `tokens.stylex.ts`: its light and night values. */
@@ -146,7 +125,6 @@ test("door.css has the literal values of the tokens", () => {
   for (const [name, token] of [
     ["ui", "ui"],
     ["mono", "mono"],
-    ["top", "top"],
     ["status", "status"],
     ["statement", "statement"],
     ["heading", "heading"],

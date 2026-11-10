@@ -93,6 +93,6 @@ test("without the isolation headers the app says so", async ({ page }) => {
   // A typographic apostrophe.
   await expect(page.locator("#unsupported-heading")).toHaveText("This browser can’t run Zipscope");
   await expect(page.locator("#unsupported-reason")).toContainText("not cross-origin isolated");
-  // The explainer stays below.
-  await expect(page.locator("#explainer")).toHaveCount(1);
+  // The static page goes.
+  await expect(page.locator("#door-bands")).toHaveCount(0);
 });

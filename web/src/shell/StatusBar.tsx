@@ -1,7 +1,6 @@
 // The map margin: the bottom status bar reads like the legend of a map.
 // It shows the archive name, the file size, the entries listed, the store
-// memory while it matters, and the parse progress. At its end, it shows the
-// update notice when a new version waits.
+// memory while it matters, and the parse progress.
 import * as stylex from "@stylexjs/stylex";
 import { Show } from "solid-js";
 import { exactBytes, formatSize, integers } from "../format";
@@ -11,7 +10,6 @@ import { controls } from "./controls";
 import { isParsing, phaseProgress, phaseText } from "./phase";
 import type { ParsePhase } from "./phase";
 import { nameLabel } from "../label";
-import { lifecycle } from "../lifecycle/strings";
 
 export interface StatusBarProps {
   /** The open archive, or undefined before the first file. */
@@ -38,9 +36,6 @@ export interface StatusBarProps {
   /** The narrow layout keeps only the entries and the status text (no
    *  progress track: the text gives the percent). */
   narrow: boolean;
-  /** Present when a new version waits: the update notice shows, and its
-   *  Reload control calls it. */
-  onUpdate?: (() => void) | undefined;
 }
 
 export function StatusBar(props: StatusBarProps) {
@@ -174,22 +169,6 @@ export function StatusBar(props: StatusBarProps) {
           </>
         )}
       </Show>
-      {/* Quiet: muted text and a plain control at the end of the margin.
-          The page never reloads on its own, because a reload loses the
-          open archive. */}
-      <Show when={props.onUpdate !== undefined}>
-        <span id="update-notice" role="status" {...stylex.attrs(styles.update)}>
-          {lifecycle.updateReady}
-        </span>
-        <button
-          id="update-reload"
-          type="button"
-          onClick={() => props.onUpdate?.()}
-          {...stylex.attrs(styles.field, styles.cancel, controls.focusRing)}
-        >
-          {lifecycle.reload}
-        </button>
-      </Show>
     </footer>
   );
 }
@@ -285,18 +264,6 @@ const styles = stylex.create({
     transformOrigin: "left",
     transitionDuration: { default: "200ms", "@media (prefers-reduced-motion: reduce)": "0s" },
     transitionProperty: "transform",
-  },
-  /** The update notice takes the end of the margin. Its sentence gets
-   *  only the free space (no width of its own), so on a narrow screen it
-   *  goes to an ellipsis or to nothing, and the facts of the archive keep
-   *  their full text. Reload never shrinks. */
-  update: {
-    flexBasis: 0,
-    flexGrow: 1,
-    minWidth: 0,
-    textAlign: "end",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
   },
   cancel: {
     backgroundColor: "transparent",

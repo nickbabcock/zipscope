@@ -45,7 +45,7 @@ test("after the preload, the sample opens without the network", async ({ page, c
   await page.goto("/");
   await expect(page.locator("#front-door")).toHaveAttribute("data-preloaded", "true");
   await context.setOffline(true);
-  await page.locator("#sample-button").click();
+  await page.locator("#door-shot-button").click();
   const result = await waitForOutcome(page);
   expect(result.outcome, result.status).toBe("complete");
   await expect(page.locator("#demo-label")).toHaveText(front.demo);
@@ -59,7 +59,7 @@ test("the offline line shows only after the preload", async ({ page }) => {
   });
   await page.goto("/");
   const door = page.locator("#front-door");
-  await expect(page.locator("#door-questions")).toBeVisible();
+  await expect(page.locator("#door-bands")).toBeVisible();
   await expect(door).toHaveAttribute("data-preloaded", "pending");
   await expect(page.locator("#front-test")).toBeHidden();
   gate.resolve();
@@ -251,7 +251,7 @@ test("a sample generator that did not load during the preload loads again", asyn
   });
   await page.goto("/");
   await expect(page.locator("#front-door")).toHaveAttribute("data-preloaded", "false");
-  await page.locator("#sample-button").click();
+  await page.locator("#door-shot-button").click();
   const result = await waitForOutcome(page);
   expect(result.outcome, result.status).toBe("complete");
   await expect(page.locator("#demo-label")).toHaveText(front.demo);

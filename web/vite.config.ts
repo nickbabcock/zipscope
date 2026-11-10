@@ -10,7 +10,7 @@ import { playwright } from "@vitest/browser-playwright";
 import stylex from "@stylexswc/unplugin/vite";
 import { defineConfig } from "vite";
 import type { Plugin } from "vite";
-import { doorHtml, originTags } from "./src/front/door-static.ts";
+import { crawlFiles, doorHtml, headTags } from "./src/front/door-static.ts";
 
 const port = Number(process.env.ZIPSCOPE_PORT ?? 4173);
 // A fixed port, so that `tailscale serve` always points to this server.
@@ -69,21 +69,29 @@ function buildSha(): string {
 
 /**
  * Puts the static front door in `index.html`, around the root element, so
- * the served page has it before any script runs. With `ZIPSCOPE_ORIGIN`, it
- * also adds the three head tags that need the production origin. Without it,
+ * the served page has it before any script runs. The plugin also adds the
+ * head tags of the page. With `ZIPSCOPE_ORIGIN`, it adds the tags that need the
+ * production origin, and writes `sitemap.xml` and `robots.txt`. Without it,
  * it adds a `noindex` tag, so a preview deploy stays out of search results.
  * `mise run build:production` gives the value.
  */
 function staticDoor(): Plugin {
+  const origin = process.env.ZIPSCOPE_ORIGIN;
   return {
     name: "zipscope:static-door",
     transformIndexHtml(html) {
       const body = html.replace('<div id="root"></div>', doorHtml());
-      const tags = originTags(process.env.ZIPSCOPE_ORIGIN).map((tag) => ({
+      const tags = headTags(origin).map((tag) => ({
         ...tag,
         injectTo: "head" as const,
       }));
       return { html: body, tags };
+    },
+    generateBundle() {
+      if (origin === undefined || origin === "") return;
+      const files = crawlFiles(origin);
+      this.emitFile({ type: "asset", fileName: "sitemap.xml", source: files.sitemap });
+      this.emitFile({ type: "asset", fileName: "robots.txt", source: files.robots });
     },
   };
 }
@@ -128,9 +136,16 @@ function preloadApp(): Plugin {
   };
 }
 
-/** The files of `public/` that the app shell needs. The social image and
- *  `_headers` are not part of it. */
-const SHELL_PUBLIC = ["app-icon.svg", "door-boot.js", "favicon.svg", "manifest.webmanifest"];
+/** The files of `public/` that the app shell needs. The social image, the
+ *  pictures of the front door (`door/`) and `_headers` are not part of it:
+ *  the door shows their text equivalent when they are not in the cache. */
+const SHELL_PUBLIC = [
+  "app-icon.svg",
+  "door-boot.js",
+  "favicon.svg",
+  "fonts/archivo-black-latin.woff2",
+  "manifest.webmanifest",
+];
 
 /**
  * Gives the service worker the files of the app shell and a version. After

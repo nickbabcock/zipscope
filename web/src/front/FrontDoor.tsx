@@ -1,14 +1,15 @@
-// The front door: the empty state at `/`. On a first visit it is the static
-// page from `index.html` (see `door-static.ts`): three questions, each with
-// its answer for the sample archive, a sticky row of actions, and more
-// questions below the fold. This component moves the static page into the work
-// area and draws its controls in the reserved slots. A drop or the sample
-// archive turns the work area into the tool, with no navigation.
+// The front door: the empty state at `/`. On a first
+// visit it is the static page from the served HTML (see `door-static.ts`): the
+// word mark, the row of actions, a picture of the tool on the sample archive,
+// five bands about what Zipscope does, and a close. This
+// component moves the static page into the work area and draws its controls
+// in the reserved slots. A drop or the sample archive turns the work area into
+// the tool, with no navigation.
 //
 // Other states:
 // - Back from the first entry of an open archive: "Return to name.zip".
-// - Chromium keeps the handles of the recent archives. The first door and
-//   the compact door then list them below the row of actions.
+// - Chromium keeps the handles of the recent archives. The first door then
+//   lists them below the row of actions.
 // - A history entry of an archive that is not open, for example after a
 //   reload: "Reopen the file to continue".
 // - A new tab that waits for the file of another tab, or a window of a
@@ -36,19 +37,18 @@ import { Icon } from "../shell/icons";
 import { color, textSize } from "../theme/tokens.stylex";
 import { preload as preloadWorkers } from "../workers";
 import { DemoTag } from "./DemoTag";
-import { compactStored } from "./door-flag";
-import { page, takeDoor } from "./door-styles";
+import { takeDoor } from "./door-styles";
 import { warmSample } from "./sample-client";
-import type { Answer, SampleUse } from "./sample-names";
+import type { SampleUse } from "./sample-names";
 import { lifecycle } from "../lifecycle/strings";
 import { front, SHOW_OFFLINE_TEST } from "./strings";
-import { nameLabel, nameText, nameTitle } from "../label";
+import { nameLabel, nameTitle } from "../label";
 
 /** The state of the front door. App derives it, so the door cannot get a
  *  combination that does not occur. The kind is also the `data-state`
  *  value. */
 export type Door =
-  /** A first visit: the questions, or the compact row after a first file. */
+  /** A visit to the home page: the poster. */
   | { kind: "first" }
   /** Back from the first entry of the open archive. */
   | { kind: "return"; name: string }
@@ -120,8 +120,7 @@ export function FrontDoor(props: FrontDoorProps) {
   createEffect(
     () => props.door.kind,
     (kind) => {
-      document.documentElement.dataset.door =
-        kind !== "first" ? "resume" : compactStored() ? "compact" : "first";
+      document.documentElement.dataset.door = kind === "first" ? "first" : "resume";
     },
   );
   onSettled(() => {
@@ -135,7 +134,7 @@ export function FrontDoor(props: FrontDoorProps) {
     };
   });
 
-  const openButton = (primary: boolean, id: string) => (
+  const openButton = (primary: boolean, id: string, label: string = front.open) => (
     <button
       id={id}
       type="button"
@@ -148,7 +147,7 @@ export function FrontDoor(props: FrontDoorProps) {
       )}
     >
       <Icon name="open" />
-      {front.open}
+      {label}
     </button>
   );
 
@@ -161,48 +160,7 @@ export function FrontDoor(props: FrontDoorProps) {
       styles.named,
     );
 
-  /** A "See it" control of an answer. */
-  const seeIt = (answer: Answer) => (
-    <button
-      id={`see-${answer}`}
-      type="button"
-      aria-label={front.seeNames[answer]}
-      aria-busy={props.sampleUse === answer ? "true" : undefined}
-      onClick={() => props.onSample(answer)}
-      {...stylex.attrs(
-        styles.see,
-        props.sampleUse === answer && styles.seeBusy,
-        controls.focusRing,
-      )}
-    >
-      {front.see}
-    </button>
-  );
-
-  const sampleButton = () => (
-    <button
-      id="sample-button"
-      type="button"
-      aria-busy={props.sampleUse === "sample" ? "true" : undefined}
-      onClick={() => props.onSample("sample")}
-      {...stylex.attrs(
-        controls.button,
-        controls.focusRing,
-        styles.action,
-        props.sampleUse === "sample" && styles.buttonBusy,
-      )}
-    >
-      <Icon name="archive" />
-      <span>
-        {front.sampleShort}
-        <span {...stylex.attrs(styles.sampleRest)}>
-          {front.sample.slice(front.sampleShort.length)}
-        </span>
-      </span>
-    </button>
-  );
-
-  /** The recent archives: a question, a list of names and sizes, and a
+  /** The recent archives: a label, a list of names and sizes, and a
    *  line that says what the browser keeps. The section stays while the
    *  line about a lost archive shows, so its status region is in the page
    *  before its text. */
@@ -217,7 +175,7 @@ export function FrontDoor(props: FrontDoorProps) {
     >
       <Show when={props.recent.length > 0}>
         <h2 id="recent-heading" {...stylex.attrs(styles.recentHeading)}>
-          {front.recentQuestion}
+          {front.recentHeading}
         </h2>
         <ul id="recent-list" {...stylex.attrs(styles.recentList)}>
           <For each={props.recent}>
@@ -248,7 +206,7 @@ export function FrontDoor(props: FrontDoorProps) {
             type="button"
             aria-label={front.recentClearName}
             onClick={() => props.onClear()}
-            {...stylex.attrs(styles.see, controls.focusRing)}
+            {...stylex.attrs(styles.linkButton, controls.focusRing)}
           >
             {front.recentClear}
           </button>
@@ -275,6 +233,21 @@ export function FrontDoor(props: FrontDoorProps) {
     },
   );
 
+  /** The picture of the tool on the sample archive: the way into the
+   *  sample. It opens the root listing of the sample. */
+  const shotButton = (picture: Element) => (
+    <button
+      id="door-shot-button"
+      type="button"
+      aria-label={front.shotName}
+      aria-busy={props.sampleUse === "sample" ? "true" : undefined}
+      onClick={() => props.onSample("sample")}
+      {...stylex.attrs(styles.shot, controls.focusRing)}
+    >
+      {picture}
+    </button>
+  );
+
   /** The owner of the door. A `ref` runs with no owner, and the controls that
    *  it draws must go with the door. */
   const owner = getOwner();
@@ -285,11 +258,11 @@ export function FrontDoor(props: FrontDoorProps) {
     const fill = (id: string, ...nodes: unknown[]) =>
       staticPage.querySelector(`#${id}`)?.replaceChildren(...(nodes as Node[]));
     runWithOwner(owner, () => {
-      fill("door-see-contents", seeIt("contents"));
-      fill("door-see-space", seeIt("space"));
-      fill("door-see-health", seeIt("health"));
-      fill("door-buttons", openButton(true, "front-open"), sampleButton());
+      fill("door-buttons", openButton(true, "front-open"));
+      fill("door-close-buttons", openButton(true, "close-open"));
       fill("door-recent", recentList());
+      const picture = staticPage.querySelector("#door-shot picture");
+      if (picture !== null) fill("door-shot", shotButton(picture));
     });
     slot.append(staticPage);
   };
@@ -331,8 +304,8 @@ export function FrontDoor(props: FrontDoorProps) {
         </Match>
         <Match when={props.door.kind === "return" && props.door}>
           {(door) => (
-            <div {...stylex.attrs(page.pitch, styles.gutterDoor)}>
-              <div {...stylex.attrs(styles.compactRow)}>
+            <div {...stylex.attrs(styles.state)}>
+              <div {...stylex.attrs(styles.stateRow)}>
                 <button
                   ref={(el) => (focusTarget = el)}
                   id="return-button"
@@ -345,30 +318,27 @@ export function FrontDoor(props: FrontDoorProps) {
                     {front.returnTo(nameLabel(door().name))}
                   </span>
                 </button>
-                {openButton(false, "compact-open")}
+                {openButton(false, "other-open", front.openOther)}
               </div>
             </div>
           )}
         </Match>
         <Match when={props.door.kind === "reopen" && props.door}>
           {(door) => (
-            // On the gutter of the first front door, not centered, so the
-            // door does not move to another axis after a reload.
-            <div {...stylex.attrs(page.pitch, styles.gutterDoor)}>
-              <h2 id="reopen-text" {...stylex.attrs(page.unsupported)}>
+            // At the top, on the axis of the poster, so the door does not
+            // move to another place after a reload.
+            <div {...stylex.attrs(styles.state)}>
+              <h2 id="reopen-text" {...stylex.attrs(styles.stateHeading)}>
                 {front.reopen}
               </h2>
               <p id="reopen-why" {...stylex.attrs(styles.reopenWhy)}>
                 {front.reopenWhy}
               </p>
-              {/* The remembered location belongs to the archive button,
-                  so it is directly below it. */}
-              <div {...stylex.attrs(styles.reopen)}>
+              <div {...stylex.attrs(styles.stateRow, styles.reopenRow)}>
                 <button
                   ref={(el) => (focusTarget = el)}
                   id="reopen-button"
                   type="button"
-                  aria-label={front.reopenName(nameText(door().lost.name))}
                   aria-busy={props.sampleUse === "sample" ? "true" : undefined}
                   onClick={() =>
                     door().lost.demo ? props.onSample("sample") : props.onReopen(door().lost)
@@ -377,39 +347,24 @@ export function FrontDoor(props: FrontDoorProps) {
                 >
                   <Icon name="archive" />
                   <span {...stylex.attrs(styles.name)} dir="ltr">
-                    {nameLabel(door().lost.name)}
+                    {front.reopenName(nameLabel(door().lost.name))}
                   </span>
                   <Show when={door().lost.demo}>
                     <DemoTag />
                   </Show>
                 </button>
-                <Show when={door().refused}>
-                  <p id="reopen-refused" role="status" {...stylex.attrs(styles.reopenPlace)}>
-                    {front.reopenRefused}
-                  </p>
-                </Show>
-                <Show when={door().lost.state.path}>
-                  {(path) => (
-                    <p id="reopen-path" dir="ltr" {...stylex.attrs(styles.reopenPlace)}>
-                      {front.reopenPath("")}
-                      <span {...stylex.attrs(styles.reopenValue)}>{nameLabel(path())}</span>
-                    </p>
-                  )}
-                </Show>
-                <Show when={door().lost.state.query}>
-                  {(query) => (
-                    <p id="reopen-search" dir="ltr" {...stylex.attrs(styles.reopenPlace)}>
-                      {front.reopenSearch(nameLabel(query()))}
-                    </p>
-                  )}
-                </Show>
+                {openButton(false, "other-open", front.openOther)}
               </div>
-              <div {...stylex.attrs(styles.reopenRow)}>{openButton(false, "compact-open")}</div>
+              <Show when={door().refused}>
+                <p id="reopen-refused" role="status" {...stylex.attrs(styles.reopenRefused)}>
+                  {front.reopenRefused}
+                </p>
+              </Show>
             </div>
           )}
         </Match>
         <Match when={props.door.kind === "receiving"}>
-          <div {...stylex.attrs(page.pitch, styles.gutterDoor)}>
+          <div {...stylex.attrs(styles.state)}>
             <p id="receiving-text" role="status" {...stylex.attrs(styles.receivingText)}>
               {props.door.kind === "receiving" && props.door.launch
                 ? lifecycle.launching
@@ -423,7 +378,6 @@ export function FrontDoor(props: FrontDoorProps) {
 }
 
 const NARROW = "@media (max-width: 640px)";
-const TINY = "@media (max-width: 379px)";
 const COARSE = "@media (pointer: coarse)";
 
 const styles = stylex.create({
@@ -441,8 +395,8 @@ const styles = stylex.create({
   contents: {
     display: "contents",
   },
-  /** "See it": a control in the form of a link, at the end of an answer. */
-  see: {
+  /** A control in the form of a link, in a line of text. */
+  linkButton: {
     backgroundColor: "transparent",
     borderRadius: 2,
     borderStyle: "none",
@@ -454,10 +408,6 @@ const styles = stylex.create({
     textDecorationThickness: 1,
     textUnderlineOffset: 3,
   },
-  seeBusy: {
-    cursor: "progress",
-    textDecorationStyle: "dashed",
-  },
   buttonBusy: {
     backgroundColor: color.raised,
     cursor: "progress",
@@ -465,36 +415,53 @@ const styles = stylex.create({
   /** On a phone the two buttons share the row, so it has one edge. */
   action: {
     flexGrow: { default: 0, [NARROW]: 1 },
-    fontSize: textSize.title,
-    // A touch screen gets 44 px buttons.
-    height: { default: 36, [COARSE]: 44 },
+    fontSize: textSize.lead,
+    // The buttons of the door are 44 px high, also for a mouse.
+    height: 44,
     justifyContent: "center",
     paddingInline: 14,
   },
-  sampleRest: {
-    display: { default: "inline", [TINY]: "none" },
+  /** The picture is the control: no fill and no edge of a button. */
+  shot: {
+    backgroundColor: "transparent",
+    borderRadius: 8,
+    borderStyle: "none",
+    cursor: { default: "pointer", ":is([aria-busy])": "progress" },
+    display: "block",
+    padding: 0,
+    width: "100%",
   },
   named: {
     maxWidth: "100%",
   },
-  compactRow: {
+  /** The return, reopen and receiving doors: at the top, on the axis of
+   *  the poster (see `--door-gutter` in `door.css`). */
+  state: {
+    alignItems: "flex-start",
+    boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+    paddingBlock: "clamp(24px, 3vw, 48px)",
+    paddingInline: "clamp(16px, 4.5vw, 64px)",
+  },
+  /** The display face of the poster (see `door.css`). */
+  stateHeading: {
+    color: color.ink,
+    fontFamily: '"Archivo Black", system-ui, sans-serif',
+    fontSize: "clamp(36px, 6vw, 72px)",
+    fontWeight: 400,
+    letterSpacing: "-0.03em",
+    lineHeight: 1,
+    margin: 0,
+    maxWidth: "18ch",
+    textWrap: "balance",
+  },
+  stateRow: {
     columnGap: 12,
     display: "flex",
     flexWrap: "wrap",
     maxWidth: "100%",
     rowGap: 12,
-  },
-  gutterDoor: {
-    alignItems: "flex-start",
-  },
-  /** The archive button and its remembered location. */
-  reopen: {
-    alignItems: "flex-start",
-    display: "flex",
-    flexDirection: "column",
-    marginTop: 24,
-    maxWidth: "100%",
-    rowGap: 8,
   },
   receivingText: {
     color: color.ink,
@@ -512,31 +479,23 @@ const styles = stylex.create({
     maxWidth: "52ch",
     textWrap: "pretty",
   },
-  reopenPlace: {
+  reopenRefused: {
     color: color.inkMuted,
     fontSize: textSize.body,
     margin: 0,
+    marginTop: 12,
     maxWidth: "60ch",
-    overflowWrap: "anywhere",
   },
-  /** The remembered folder is the reason to reopen: it is in ink. */
-  reopenValue: {
-    color: color.ink,
-  },
-  /** The recent archives, after the row of actions. A rule is above it, as
-   *  between the questions. */
+  /** The recent archives, directly below the row of actions, on its axis. */
   recent: {
-    borderTopColor: color.rule,
-    borderTopStyle: "solid",
-    borderTopWidth: 1,
-    paddingBlock: { default: "24px 40px", [NARROW]: "20px 32px" },
-    paddingInline: { default: "clamp(16px, 7vw, 112px)", [NARROW]: 16 },
+    marginTop: { default: 24, [NARROW]: 20 },
   },
+  /** A small label: the list is quieter than the actions above it. */
   recentHeading: {
-    fontSize: textSize.heading,
-    fontWeight: 650,
-    letterSpacing: "-0.015em",
-    lineHeight: 1.2,
+    color: color.inkMuted,
+    fontSize: textSize.body,
+    fontWeight: 600,
+    lineHeight: 1.4,
     margin: 0,
   },
   /** The rows of the sample answer have the same width and rules. */
@@ -595,8 +554,7 @@ const styles = stylex.create({
     marginTop: { default: 12, ":empty": 0 },
   },
   reopenRow: {
-    display: "flex",
-    marginTop: 36,
+    marginTop: 24,
   },
   name: {
     minWidth: 0,

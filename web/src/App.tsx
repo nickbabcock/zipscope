@@ -12,7 +12,6 @@ import {
 } from "solid-js";
 import { NONE, SOFT_BUDGET_BYTES } from "./contracts";
 import type { SortColumn } from "./contracts";
-import { rememberCompact } from "./front/door-flag";
 import { takeDoor } from "./front/door-styles";
 import { FrontDoor } from "./front/FrontDoor";
 import type { Door } from "./front/FrontDoor";
@@ -27,7 +26,6 @@ import { openHandoffTab, takeHandoffId } from "./lifecycle/address";
 import { LAUNCH_WAIT_MS, takeLaunch, watchLaunches } from "./lifecycle/launch";
 import type { LaunchQueue } from "./lifecycle/launch";
 import type { RecentArchive } from "./lifecycle/remember";
-import { applyUpdate, watchUpdate } from "./lifecycle/update";
 import { loadHandoff, loadOpenChoice, loadRemember } from "./lifecycle/load";
 import { droppedFile, pickFile, plainFile, takeKeptDrop } from "./lifecycle/pick";
 import type { Incoming } from "./lifecycle/pick";
@@ -47,6 +45,12 @@ import { nameText } from "./label";
 
 /** The time after the start when App removes the old file handles. */
 const PRUNE_DELAY_MS = 3000;
+/** True where the open picker gives a file handle that the browser can keep
+ *  for a later page (Chromium). Firefox has `FileSystemFileHandle` for its
+ *  private storage, but not this picker. `public/door-boot.js` makes the
+ *  same check. */
+const KEEPS_HANDLES =
+  typeof (window as { showOpenFilePicker?: unknown }).showOpenFilePicker === "function";
 
 type ChoiceModule = Awaited<ReturnType<typeof loadOpenChoice>>;
 
@@ -81,13 +85,12 @@ export function App() {
   /** True when a file launch opened this page. The file comes later. */
   const launched = takeLaunch(location, history);
   const [receiving, setReceiving] = createSignal(handoff !== undefined || launched);
-  /** The registration of the service worker when a new version waits. */
-  const [update, setUpdate] = createSignal<ServiceWorkerRegistration>();
   /** A file that came while an archive is open. The user chooses to
    *  replace the archive or to open the file in a new tab. */
   const [offered, setOffered] = createSignal<Incoming>();
   /** The location that the next file restores when it is the same
-   *  archive. The reopen action sets it before it opens the file input. */
+   *  archive. The reopen action and "Open a file" of the door set it before
+   *  they open the file picker. */
   let restoreNext: NavState | undefined;
   /** The sessions whose kept handle did not give the file in this page.
    *  Their reopen action opens the file picker. */
@@ -104,7 +107,7 @@ export function App() {
 
   /**
    * A production build registers the service worker: it caches the app
-   * shell and shows the update notice. The install loads the whole shell,
+   * shell for offline use. The install loads the whole shell,
    * so the registration comes after the first work of the page (the
    * preload of the front door, or the parse of the first archive). Then
    * the install does not slow the first listing. The development server
@@ -115,15 +118,9 @@ export function App() {
     const container = (navigator as { serviceWorker?: ServiceWorkerContainer }).serviceWorker;
     if (registered || !import.meta.env.PROD || container === undefined) return;
     registered = true;
-    void watchUpdate(container, "/sw.js", setUpdate);
-  };
-
-  /** Reload of the update notice: the new version activates, and then
-   *  this tab reloads. */
-  const reloadForUpdate = () => {
-    const registration = update();
-    if (registration === undefined) return;
-    void applyUpdate(registration, navigator.serviceWorker, () => location.reload());
+    // A failed registration (a private window in some browsers) leaves the
+    // app without offline use. It still works.
+    container.register("/sw.js").catch(() => {});
   };
 
   // The front door lists the kept handles, and an idle task removes the
@@ -208,13 +205,6 @@ export function App() {
     nav.openArchive(next.session.id, next.session.info);
     remember(next.session, incoming, restore);
     void next.session.finished.then(registerWorker, registerWorker);
-    // After a first real file, this browser gets the compact door. The sample
-    // does not count, and a file that does not open does not count.
-    if (!demo) {
-      void next.session.finished.then((outcome) => {
-        if (outcome.kind === "complete") rememberCompact();
-      });
-    }
   };
 
   /** Keeps the identity and the handle of the archive for a reload, and
@@ -393,9 +383,6 @@ export function App() {
     return () => clearTimeout(timer);
   });
 
-  /** The line beside the word mark, from the served HTML. */
-  const tagline = takeDoor().tagline;
-
   /** The control that started the sample. It has `aria-busy`. A second
    *  control during the generation takes its place and starts no more work. */
   const [sampleUse, setSampleUse] = createSignal<SampleUse>();
@@ -403,6 +390,9 @@ export function App() {
   const [preloaded, setPreloaded] = createSignal(false);
   /** True after the sample could not open, until the next try. */
   const [sampleFailed, setSampleFailed] = createSignal(false);
+
+  // Takes the static page out of the document before the first render.
+  takeDoor();
 
   /** Generates the demo archive in a worker and opens it. */
   const openSample = async (use: SampleUse) => {
@@ -447,7 +437,11 @@ export function App() {
     }
     if (receiving()) return { kind: "receiving", launch: launched };
     const lost = nav.lost();
-    return lost === undefined
+    // The reopen door is only for an archive that can open again with no
+    // file picker: the demo, or a file whose handle the browser can keep.
+    // Else "Open a file" of the first door does the same, and it restores
+    // the location when the file is the same archive.
+    return lost === undefined || !(lost.demo || KEEPS_HANDLES)
       ? { kind: "first" }
       : { kind: "reopen", lost, refused: refused() === lost.state.session };
   });
@@ -462,22 +456,17 @@ export function App() {
 
   return (
     <div
-      {...stylex.attrs(styles.app)}
+      {...stylex.attrs(styles.app, (session() === undefined || nav.front()) && styles.appDoor)}
       onDragOver={(event) => event.preventDefault()}
       onDrop={onDrop}
     >
       <TopBar
         archive={session()?.info}
         narrow={narrow()}
-        hideOpen={
-          (session() === undefined || nav.front()) &&
-          (door().kind === "first" || door().kind === "reopen")
-        }
+        hidden={session() === undefined || nav.front()}
         onFile={(file) => offer(plainFile(file))}
         onPick={() => void pick()}
         input={(element) => (fileInput = element)}
-        plainMark={session() === undefined || nav.front()}
-        note={session() === undefined && door().kind === "first" ? tagline : undefined}
         search={
           <Show when={session() !== undefined && !nav.front()}>
             <SearchBox
@@ -497,7 +486,10 @@ export function App() {
             door={door()}
             online={online()}
             onReturn={() => nav.returnToArchive()}
-            onOpen={() => void pick()}
+            onOpen={() => {
+              restoreNext = nav.lost()?.state;
+              void pick();
+            }}
             onReopen={(lost) => void reopen(lost)}
             onSample={(use) => void openSample(use)}
             sampleUse={sampleUse()}
@@ -547,7 +539,6 @@ export function App() {
         phase={view()?.phase() ?? OPENING}
         onCancel={() => active?.cancel()}
         narrow={narrow()}
-        onUpdate={update() === undefined ? undefined : reloadForUpdate}
       />
       <Show when={offered()}>
         {(file) => {
@@ -590,6 +581,10 @@ const styles = stylex.create({
     lineHeight: 1.4,
     overflow: "hidden",
     WebkitFontSmoothing: "antialiased",
+  },
+  /** The front door has no top bar: its word mark is the header. */
+  appDoor: {
+    gridTemplateRows: `minmax(0, 1fr) ${size.status}`,
   },
   main: {
     display: "grid",

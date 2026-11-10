@@ -7,10 +7,11 @@ export const SAMPLE_ROOT = "demo-app-2.4.0";
 export const SAMPLE_DUPLICATE = `${SAMPLE_ROOT}/share/doc/demo-app/CHANGELOG.md`;
 /** The space hog. */
 export const SAMPLE_HOG = `${SAMPLE_ROOT}/debug/demo-app.debug`;
+/** The icon of the app: a real picture, for the preview band. */
+export const SAMPLE_PICTURE = `${SAMPLE_ROOT}/share/demo-app/icons/hicolor/scalable/apps/demo-app.svg`;
 /** The bytes after the end record. */
 export const SAMPLE_TRAILER_BYTES = 3 * 1024;
 
-/** The answers of the first view. Each has a "See it" control. */
-export type Answer = "contents" | "space" | "health";
-/** The control that starts the sample. */
-export type SampleUse = Answer | "sample";
+/** The control that starts the sample: the picture of the tool on the first
+ *  door, or the reopen button of the demo. Both open the root listing. */
+export type SampleUse = "sample";

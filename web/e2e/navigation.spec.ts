@@ -384,7 +384,7 @@ test("the narrow preview pushes, and Back closes it", async ({ page }) => {
   await expect(page.locator("#preview-pane")).toBeVisible();
 });
 
-test("Back with the tree drawer open leaves the top bar on", async ({ page }) => {
+test("Back with the tree drawer open does not leave the top bar inert", async ({ page }) => {
   await open(page, 390);
   const bar = page.locator("header");
   const inert = () => bar.evaluate((element) => (element as HTMLElement).inert);
@@ -393,7 +393,8 @@ test("Back with the tree drawer open leaves the top bar on", async ({ page }) =>
   await page.goBack();
   await expect(page.locator("#front-door")).toHaveAttribute("data-state", "return");
   await expect.poll(inert).toBe(false);
-  await expect(bar.getByRole("button", { name: /open/i }).first()).toBeEnabled();
+  // The door has no top bar. Its own button opens a file.
+  await expect(page.locator("#other-open")).toBeEnabled();
   await page.goForward();
   await expect(page.locator("#front-door")).toBeHidden();
   await expect.poll(inert).toBe(true);

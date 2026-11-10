@@ -1,14 +1,17 @@
-// The front door: the three questions in the served HTML, the answers, the
-// connection reading, the demo archive and its "See it" controls, a drop that
-// turns the page into the tool, and the states for returning visitors.
+// The front door: the word mark, the row of actions and the picture of the
+// tool in the served HTML, the five bands and their "See it" controls, the
+// connection reading, the demo archive, a drop that turns the page into the
+// tool, and the states for returning visitors.
 import { writeFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import { door, front, SOURCE_URL } from "../src/front/strings.ts";
+import { door, front } from "../src/front/strings.ts";
 import { dropArchive, openArchive, waitForOutcome } from "./listing";
 import { storedZip } from "./stored-zip";
 
-const QUESTIONS = [door.contents.question, door.space.question, door.health.question];
+/** The text of the `h1`: the word mark, a hidden colon and the tagline. */
+const HEADING = `${door.mark}: ${door.tagline}`;
+const BANDS = [door.fast, door.local, door.preview, door.health, door.save];
 
 /** A served copy with no marks: the HTML puts these words in `<code>` or `<b>`. */
 const plain = (text: string) => text.replaceAll("`", "").replaceAll("**", "");
@@ -25,144 +28,113 @@ async function marked(page: Page): Promise<boolean> {
 for (const [width, height] of [
   [1440, 900],
   [1440, 780],
+  [1280, 720],
   [1000, 800],
-  [921, 800],
-  [920, 800],
   [720, 800],
-  [641, 800],
   [390, 844],
+  [320, 568],
 ]) {
-  test(`the first view has the questions and the actions at ${width} x ${height}`, async ({
+  test(`the first view has the word mark, the actions and the tool at ${width} x ${height}`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height });
     await page.goto("/");
-    const frontDoor = page.locator("#front-door");
-    await expect(frontDoor).toHaveAttribute("data-state", "first");
-    let previous = -1;
-    for (const question of QUESTIONS) {
-      const heading = page.getByRole("heading", { level: 2, name: question, exact: true });
-      await expect(heading).toBeInViewport({ ratio: 1 });
-      const box = (await heading.boundingBox())!;
-      expect(box.y, question).toBeGreaterThan(previous);
-      previous = box.y;
-    }
-    for (const selector of ["#see-contents", "#see-space", "#see-health"]) {
-      await expect(page.locator(selector)).toHaveText(front.see);
-      await expect(page.locator(selector)).toBeInViewport({ ratio: 1 });
-    }
-    await expect(page.locator("#door-action")).toHaveText(door.action.fine, { useInnerText: true });
+    await expect(page.locator("#front-door")).toHaveAttribute("data-state", "first");
+    const heading = page.getByRole("heading", { level: 1 });
+    await expect(heading).toHaveText(HEADING);
+    await expect(page.locator("#door-wordmark")).toBeInViewport({ ratio: 1 });
+    // The word mark is in the display face, and it does not overflow.
+    expect(
+      await page.locator("#door-wordmark").evaluate((el) => getComputedStyle(el).fontFamily),
+    ).toContain("Archivo Black");
+    const widths = await page
+      .locator("#front-door")
+      .evaluate((door) => [door.scrollWidth, door.clientWidth]);
+    expect(widths[0]).toBe(widths[1]);
     await expect(page.locator("#front-open")).toHaveText(front.open);
-    await expect(page.locator("#sample-button")).toHaveText(front.sample);
     await expect(page.locator("#front-open")).toBeInViewport({ ratio: 1 });
-    await expect(page.locator("#sample-button")).toBeInViewport({ ratio: 1 });
-    // The action line and the buttons are inside the row.
-    const rowBox = (await page.locator("#door-row").boundingBox())!;
-    for (const selector of ["#door-action", "#door-buttons"]) {
-      const box = (await page.locator(selector).boundingBox())!;
-      expect(box.y, selector).toBeGreaterThanOrEqual(rowBox.y);
-      expect(box.y + box.height, selector).toBeLessThanOrEqual(rowBox.y + rowBox.height);
-    }
-    // The rest of the page is not in the first view: it starts below the top
-    // edge of the sticky row.
-    const rest = (await page.getByRole("heading", { name: door.files.question }).boundingBox())!;
-    expect(rest.y).toBeGreaterThan((await page.locator("#door-row").boundingBox())!.y);
-    // The page scrolls inside the work area. The bars and the row stay.
+    // The picture of the tool starts in the first view, below the actions.
+    const shot = (await page.locator("#door-shot-button").boundingBox())!;
+    const open = (await page.locator("#front-open").boundingBox())!;
+    expect(shot.y).toBeGreaterThan(open.y + open.height);
+    if (height >= 720) expect(shot.y).toBeLessThan(height - 28);
+    // The page scrolls inside the work area. The map margin stays.
     await page.locator("#door-close").scrollIntoViewIfNeeded();
     await expect(page.locator("#door-close")).toBeInViewport();
-    await expect(page.locator("#front-open")).toBeInViewport({ ratio: 1 });
-    await expect(page.locator("header")).toBeInViewport();
     await expect(page.locator("footer")).toBeInViewport();
     expect(await page.evaluate(() => document.scrollingElement!.scrollTop)).toBe(0);
   });
 }
 
-for (const width of [1440, 390, 320]) {
-  test(`the line beside the word mark fits at ${width} px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 844 });
+for (const [width, side] of [
+  [1440, true],
+  [390, false],
+] as const) {
+  test(`each band has its datum ${side ? "beside" : "above"} its claim at ${width} px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
     await page.goto("/");
-    await expect(page.locator("#front-door")).toBeVisible();
-    const line = page.locator("header #door-tagline");
-    await expect(line).toHaveText(door.tagline);
-    await expect(line).toBeInViewport({ ratio: 1 });
-    expect(await line.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    for (const id of ["fast", "local", "preview", "health", "save"]) {
+      const datum = (await page.locator(`#door-${id} .door-datum`).boundingBox())!;
+      const claim = (await page.locator(`#door-${id} .door-claim`).boundingBox())!;
+      if (side) expect(claim.x, id).toBeGreaterThan(datum.x + datum.width);
+      else expect(claim.y, id).toBeGreaterThanOrEqual(datum.y + datum.height);
+    }
   });
 }
 
-test("the line beside the word mark is only on the first door", async ({ page }) => {
-  await openSmall(page);
-  await expect(page.locator("#door-tagline")).toHaveCount(0);
-  await page.goBack();
-  await expect(page.locator("#front-door")).toHaveAttribute("data-state", "return");
-  await expect(page.locator("#door-tagline")).toHaveCount(0);
-});
-
-test("the rows have a label, and each name is near its size", async ({ page }) => {
-  await page.goto("/");
-  const rows = page.locator("#door-rows");
-  await expect(rows.locator("caption")).toHaveText(door.space.rowsLabel);
-  await expect(rows.locator("tr")).toHaveCount(door.space.rows.length);
-  expect((await rows.boundingBox())!.width).toBeLessThanOrEqual(480);
-  await expect(rows).toHaveCSS("cursor", "default");
-  // A rule between rows, and none below the last.
-  await expect(rows.locator("tr").last()).toHaveCSS("border-bottom-width", "0px");
-});
-
-test("the served HTML has the questions, the answers and the head tags", async ({ request }) => {
+test("the served HTML has the page, the bands and the head tags", async ({ request }) => {
   const html = await (await request.get("/")).text();
   const text = html.replace(/<\/?(code|kbd|b)>/g, "");
-  expect(html).toContain(`<h1 id="door-h1">${door.heading}</h1>`);
-  // One label covers all three answers, before the first question, and each
-  // answer says that it is for the sample.
-  expect(html.indexOf('id="door-demo"')).toBeLessThan(html.indexOf("<h2"));
+  expect(html).toContain('<span id="door-wordmark">Zipscope</span>');
+  expect(text).toContain(plain(door.lead));
   expect(html.match(/class="door-tag"/g)).toHaveLength(1);
-  expect(html.match(new RegExp(door.samplePrefix, "g"))).toHaveLength(3);
-  // The hidden heading comes before all other headings.
-  expect(html.indexOf("<h1")).toBeLessThan(html.indexOf("<h2"));
-  for (const part of [
-    door.contents,
-    door.space,
-    door.files,
-    door.reads,
-    door.lies,
-    door.inside,
-    door.keyboard,
-    ...door.formats,
-  ]) {
-    expect(html).toContain(`<h2>${part.question}</h2>`);
-    expect(text).toContain(plain(part.answer));
+  for (const band of BANDS) {
+    expect(html).toContain(`>${band.heading}</h2>`);
+    expect(text).toContain(plain(band.body));
   }
-  expect(text).toContain(plain(door.device.answer));
-  expect(html).toContain("<kbd>Backspace</kbd>");
-  expect(html).toContain(`<a href="${SOURCE_URL}">`);
+  expect(html).toContain(door.preview.shotAlt);
+  expect(html).toContain(door.local.note);
+  // The page links neither the source code nor the sample in the bands.
+  expect(html).not.toContain("github.com");
+  expect(html).not.toContain("door-see");
   expect(html).toContain(door.noScript);
-  expect(html).toContain(door.tagline);
-  expect(html).toContain("<title>What is in this zip? Zipscope, a zip viewer in your browser");
+  expect(html).toContain(door.opens);
+  expect(html).toContain("<title>Zip viewer in your browser");
   expect(html).toContain('name="description"');
   expect(html).toContain('property="og:title"');
   expect(html).toContain('name="twitter:card"');
   expect(html).toContain('rel="icon"');
+  expect(html).toMatch(
+    /<link\s+rel="preload"\s+href="\/fonts\/archivo-black-latin\.woff2"\s+as="font"/,
+  );
   // No origin in this build: these tags stay out, and the page is not indexed.
   expect(html).toContain('<meta name="robots" content="noindex"');
   expect(html).not.toContain('rel="canonical"');
   expect(html).not.toContain("og:url");
   expect(html).not.toContain("og:image");
+  expect(html).not.toContain("application/ld+json");
   // No inline style or script: the CSP blocks them.
   expect(html).not.toContain("<style");
   expect(html).not.toContain(" style=");
 });
 
-test("the first paint has the styles, with no script", async ({ browser }) => {
+test("the first paint has the styles and the pictures, with no script", async ({ browser }) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
   await page.goto("/");
   await expect(page.locator("#door-noscript")).toHaveText(door.noScript);
-  const heading = page.getByRole("heading", { level: 2, name: door.contents.question });
-  await expect(heading).toBeInViewport({ ratio: 1 });
-  expect(await heading.evaluate((element) => getComputedStyle(element).fontWeight)).toBe("650");
-  expect(await heading.evaluate((element) => getComputedStyle(element).fontFamily)).toContain(
-    "system-ui",
+  const mark = page.locator("#door-wordmark");
+  await expect(mark).toBeInViewport({ ratio: 1 });
+  expect(await mark.evaluate((element) => getComputedStyle(element).fontFamily)).toContain(
+    "Archivo Black",
   );
+  const picture = page.locator("#door-shot img");
+  await expect(picture).toHaveAttribute("alt", door.shotAlt);
+  await expect
+    .poll(() => picture.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+    .toBe(true);
   await context.close();
 });
 
@@ -175,7 +147,7 @@ for (const [name, chunk] of [
     await page.goto("/");
     await expect(page.locator("#door-failed")).toHaveText(door.noScript);
     await expect(page.locator("#door-failed")).toBeVisible();
-    await expect(page.locator("#door-questions")).toBeVisible();
+    await expect(page.locator("#door-hero")).toBeVisible();
   });
 }
 
@@ -211,10 +183,11 @@ test("a reload with an archive says why nothing works when the entry module cann
   const line = page.locator("#door-failed");
   await expect(line).toHaveText(door.noScript);
   await expect(line).toBeInViewport({ ratio: 1 });
-  // The questions and the action line stay hidden in this state.
-  await expect(page.locator("#door-questions")).toBeHidden();
+  // The rest of the page and the action line stay hidden in this state.
+  for (const selector of ["#door-lead", "#door-shot-frame", "#door-bands", "#door-close"]) {
+    await expect(page.locator(selector), selector).toBeHidden();
+  }
   await expect(page.locator("#door-action")).toBeHidden();
-  await expect(page.locator("#explainer")).toBeHidden();
 });
 
 test("a page that starts does not show the line about scripts", async ({ page }) => {
@@ -230,46 +203,54 @@ test("the headings are in order, with one h1 on the door", async ({ page }) => {
     .locator("h1, h2, h3")
     .evaluateAll((items) => items.map((item) => item.tagName));
   expect(levels[0]).toBe("H1");
+  expect(levels.filter((level) => level === "H1")).toHaveLength(1);
+  // The bands and the close are the sections of the page.
   expect(levels.slice(1).every((level) => level === "H2")).toBe(true);
-  await expect(page.locator("h1")).toHaveText(door.heading);
-  await expect(page.locator("header h1")).toHaveCount(0);
+  await expect(page.locator("h1")).toHaveText(HEADING);
+  // The poster word mark is the header: the top bar of the tool does not show.
+  await expect(page.locator("header")).toBeHidden();
 });
 
 test("the tab order follows the first view", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator("#see-contents")).toBeVisible();
+  await expect(page.locator("#door-shot-button")).toBeVisible();
   const order: (string | null)[] = [];
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 3; i++) {
     await page.keyboard.press("Tab");
     order.push(
       await page.evaluate(
-        () => document.activeElement?.id || document.activeElement?.tagName || null,
+        () => document.activeElement?.id || document.activeElement?.textContent || null,
       ),
     );
   }
-  expect(order).toEqual([
-    "see-contents",
-    "see-space",
-    "see-health",
-    "front-open",
-    "sample-button",
-    "A",
-  ]);
+  // The bands have no controls: the close comes next.
+  expect(order).toEqual(["front-open", "door-shot-button", "close-open"]);
 });
 
 test("the rest of the page shows below the first view", async ({ page }) => {
   await page.goto("/");
-  const section = page.locator("#explainer");
-  await section.scrollIntoViewIfNeeded();
-  await expect(section).toBeVisible();
-  await expect(section.locator("h2")).toHaveCount(13);
-  // The first reference answer is the one about the device.
-  await expect(section.locator("h2").first()).toHaveText(door.device.question);
-  await expect(section.locator("a")).toHaveAttribute("href", SOURCE_URL);
-  await expect(page.locator("#front-door #explainer")).toHaveCount(1);
-  // The sticky row is the only action at the end of the page.
-  await expect(page.locator("#door-close button")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: front.open })).toHaveCount(1);
+  const picture = page.locator(".door-preview-shot img");
+  await picture.scrollIntoViewIfNeeded();
+  await expect(picture).toBeVisible();
+  await expect(picture).toHaveAttribute("alt", door.preview.shotAlt);
+  await expect(page.locator("#door-bands a, #door-bands button")).toHaveCount(0);
+  // The close asks for a file again.
+  await expect(page.locator("#close-open")).toHaveText(front.open);
+  await expect(page.getByRole("button", { name: front.open })).toHaveCount(2);
+});
+
+test("the picture of the tool is the one way into the sample", async ({ page }) => {
+  await page.goto("/");
+  await mark(page);
+  const shot = page.getByRole("button", { name: front.shotName });
+  await expect(shot).toHaveId("door-shot-button");
+  // The caption that says what the picture does is in the first view.
+  await expect(page.locator("#door-shot-label")).toBeInViewport();
+  await expect(page.locator("#sample-button")).toHaveCount(0);
+  await shot.click();
+  expect((await waitForOutcome(page)).outcome).toBe("complete");
+  await expect(page.locator("#demo-label")).toHaveText(front.demo);
+  expect(await marked(page)).toBe(true);
 });
 
 for (const [width, height] of [
@@ -289,11 +270,6 @@ for (const [width, height] of [
       useInnerText: true,
     });
     expect(await page.locator("#front-open").boundingBox()).toEqual(before);
-    // In the stacked row, the short line is directly above the buttons.
-    if (width <= 920) {
-      const line = (await page.locator('.door-line[data-line="dragging"]').boundingBox())!;
-      expect(before!.y - (line.y + line.height)).toBeLessThanOrEqual(12);
-    }
   });
 }
 
@@ -305,13 +281,13 @@ for (const [width, height] of [
   test(`only the work area scrolls at ${width} x ${height}`, async ({ page }) => {
     await page.setViewportSize({ width, height });
     await page.goto("/");
-    await expect(page.locator("#see-contents")).toBeVisible();
+    await expect(page.locator("#door-shot-button")).toBeVisible();
     await page.mouse.move(width / 2, height / 2);
     await page.mouse.wheel(0, 20_000);
     await expect
       .poll(() => page.locator("#front-door").evaluate((door) => door.scrollTop))
       .toBeGreaterThan(0);
-    expect((await page.locator("header").boundingBox())!.y).toBe(0);
+    expect((await page.locator("#front-door").boundingBox())!.y).toBe(0);
     await expect(page.locator("footer")).toBeInViewport();
     const metrics = await page.evaluate(() => ({
       top: document.scrollingElement!.scrollTop,
@@ -327,67 +303,15 @@ for (const width of [320, 360, 379, 380, 390]) {
   test(`nothing overflows the width of the door at ${width} px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
     await page.goto("/");
-    await expect(page.locator("#sample-button")).toBeVisible();
+    await expect(page.locator("#door-shot-button")).toBeVisible();
     const widths = await page
       .locator("#front-door")
       .evaluate((door) => [door.scrollWidth, door.clientWidth]);
     expect(widths[0]).toBe(widths[1]);
-    const button = (await page.locator("#sample-button").boundingBox())!;
+    const button = (await page.locator("#door-shot-button").boundingBox())!;
     expect(button.x + button.width).toBeLessThanOrEqual(width);
   });
 }
-
-test("the sticky row does not cover the focus, and it stops in a low window", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.locator("#see-contents")).toBeVisible();
-  // Tab to the link below the first view. The row does not cover it.
-  await page.locator("#sample-button").focus();
-  await page.keyboard.press("Tab");
-  const link = (await page.locator("#explainer a").boundingBox())!;
-  const row = (await page.locator("#door-row").boundingBox())!;
-  expect(link.y + link.height).toBeLessThanOrEqual(row.y);
-  // In a low window, the row is in the page, below the questions.
-  await page.setViewportSize({ width: 844, height: 390 });
-  await expect(page.locator("#door-row")).toHaveCSS("position", "static");
-  const questions = (await page.locator("#door-questions").boundingBox())!;
-  const lowRow = (await page.locator("#door-row").boundingBox())!;
-  const rest = (await page.locator("#explainer").boundingBox())!;
-  expect(lowRow.y).toBeGreaterThanOrEqual(questions.y + questions.height - 1);
-  expect(rest.y).toBeGreaterThanOrEqual(lowRow.y + lowRow.height - 1);
-});
-
-test("a coarse pointer gets a hit area of 44 px on each See it", async ({ browser }) => {
-  const context = await browser.newContext({
-    viewport: { width: 390, height: 844 },
-    hasTouch: true,
-    isMobile: true,
-  });
-  const page = await context.newPage();
-  await page.goto("/");
-  await expect(page.locator("#see-space")).toBeVisible();
-  await expect(page.locator("#door-action")).toHaveText(door.action.coarse, { useInnerText: true });
-  for (const id of ["see-contents", "see-space", "see-health"]) {
-    const box = (await page.locator(`#${id}`).boundingBox())!;
-    const x = box.x + box.width / 2;
-    const top = box.y + box.height / 2 - 22;
-    const hit = await page.evaluate(
-      ([px, py]) => [
-        document.elementFromPoint(px!, py!)?.id,
-        document.elementFromPoint(px!, py! + 43)?.id,
-      ],
-      [x, top],
-    );
-    expect(hit, id).toEqual([id, id]);
-  }
-  await context.close();
-});
-
-test("each See it has its own accessible name, and it is a button", async ({ page }) => {
-  await page.goto("/");
-  for (const answer of ["contents", "space", "health"] as const) {
-    await expect(page.getByRole("button", { name: front.seeNames[answer] })).toHaveText(front.see);
-  }
-});
 
 test("a drag of text does not change the action line", async ({ page }) => {
   await page.goto("/");
@@ -439,7 +363,7 @@ test("the map margin shows the reading only while offline, and only it changes",
 test("the sample archive opens as a demo, with its findings", async ({ page }) => {
   await page.goto("/");
   await mark(page);
-  await page.locator("#sample-button").click();
+  await page.locator("#door-shot-button").click();
   const result = await waitForOutcome(page);
   expect(result.outcome, result.status).toBe("complete");
   expect(result.rows).toBeGreaterThan(500);
@@ -505,7 +429,7 @@ test("a dropped file turns the page into the tool without navigation", async ({ 
   expect(new URL(page.url()).pathname).toBe("/");
 });
 
-for (const id of ["see-contents", "sample-button"]) {
+for (const id of ["door-shot-button"]) {
   test(`Enter on ${id} moves the focus to the table, with no selected row`, async ({ page }) => {
     await page.goto("/");
     await page.locator(`#${id}`).focus();
@@ -522,52 +446,9 @@ for (const id of ["see-contents", "sample-button"]) {
   });
 }
 
-test("Enter on see-space selects the space hog and moves the focus to the table", async ({
-  page,
-}) => {
-  await page.goto("/");
-  await page.locator("#see-space").focus();
-  await page.keyboard.press("Enter");
-  expect((await waitForOutcome(page)).outcome).toBe("complete");
-  await expect(page.locator("#list-viewport")).toBeFocused();
-  await expect(page.locator('#list-viewport [aria-selected="true"]')).toHaveAttribute(
-    "data-block",
-    "true",
-  );
-});
-
-test("Enter on see-health moves the focus to the toggle of the health list", async ({ page }) => {
-  await page.goto("/");
-  await page.locator("#see-health").focus();
-  await page.keyboard.press("Enter");
-  expect((await waitForOutcome(page)).outcome).toBe("complete");
-  await expect(page.locator("#health-toggle")).toBeFocused();
-  await expect(page.locator("#health-panel [data-finding]")).toHaveCount(2);
-});
-
-test("See it on the health answer does not take the focus from a visitor who moved it", async ({
-  page,
-}) => {
-  // The visitor moves to the search field as soon as it shows.
-  await page.addInitScript(() => {
-    new MutationObserver((_, observer) => {
-      const field = document.getElementById("search-input");
-      if (field !== null) {
-        field.focus();
-        observer.disconnect();
-      }
-    }).observe(document, { childList: true, subtree: true });
-  });
-  await page.goto("/");
-  await page.locator("#see-health").click();
-  expect((await waitForOutcome(page)).outcome).toBe("complete");
-  await expect(page.locator("#health-panel [data-finding]")).toHaveCount(2);
-  await expect(page.locator("#search-input")).toBeFocused();
-});
-
 test("a real file does not move the focus", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator("#see-contents")).toBeVisible();
+  await expect(page.locator("#door-shot-button")).toBeVisible();
   const path = test.info().outputPath("focus.zip");
   writeFileSync(path, storedZip([["a/one.txt", 1]]));
   await openArchive(page, path);
@@ -585,7 +466,7 @@ test("a real file gets no ring on the first row after a scroll past the selected
   page,
 }) => {
   await page.goto("/");
-  await expect(page.locator("#see-contents")).toBeVisible();
+  await expect(page.locator("#door-shot-button")).toBeVisible();
   const path = test.info().outputPath("long.zip");
   writeFileSync(
     path,
@@ -616,7 +497,7 @@ test("a real file gets no ring on the first row after a key press on an empty pa
   page,
 }) => {
   await page.goto("/");
-  await expect(page.locator("#see-contents")).toBeVisible();
+  await expect(page.locator("#door-shot-button")).toBeVisible();
   const path = test.info().outputPath("short.zip");
   writeFileSync(path, storedZip([["one.txt", 1]]));
   await dropArchive(page, path);
@@ -634,7 +515,7 @@ test("a real file gets no ring on the first row after a key press on an empty pa
 
 test("the ring of the first row goes with the first selection", async ({ page }) => {
   await page.goto("/");
-  await page.locator("#sample-button").click();
+  await page.locator("#door-shot-button").click();
   expect((await waitForOutcome(page)).outcome).toBe("complete");
   await expect(page.locator("#list-viewport")).toBeFocused();
   expect(await rowRing(page, 0)).toContain("inset");
@@ -644,7 +525,7 @@ test("the ring of the first row goes with the first selection", async ({ page })
 
 test("the ring of the first row goes with a blur", async ({ page }) => {
   await page.goto("/");
-  await page.locator("#sample-button").click();
+  await page.locator("#door-shot-button").click();
   expect((await waitForOutcome(page)).outcome).toBe("complete");
   await expect(page.locator("#list-viewport")).toHaveAttribute("data-first-ring");
   await page.locator("#search-input").focus();
@@ -654,7 +535,7 @@ test("the ring of the first row goes with a blur", async ({ page }) => {
 /** Opens the sample with the keyboard, so that the first row has the ring. */
 async function sampleWithRing(page: Page): Promise<void> {
   await page.goto("/");
-  await page.locator("#sample-button").focus();
+  await page.locator("#door-shot-button").focus();
   await page.keyboard.press("Enter");
   expect((await waitForOutcome(page)).outcome).toBe("complete");
   await expect(page.locator("#list-viewport")).toHaveAttribute("data-first-ring");
@@ -715,10 +596,10 @@ for (const key of ["Alt+ArrowRight", "Alt+Enter"]) {
   });
 }
 
-test("See it opens the sample at the root listing", async ({ page }) => {
+test("the sample opens at the root listing", async ({ page }) => {
   await page.goto("/");
   await mark(page);
-  await page.locator("#see-contents").click();
+  await page.locator("#door-shot-button").click();
   expect((await waitForOutcome(page)).outcome).toBe("complete");
   await expect(page.locator("#demo-label")).toHaveText(front.demo);
   await expect(page.locator("#health-panel")).toHaveCount(0);
@@ -729,79 +610,20 @@ test("See it opens the sample at the root listing", async ({ page }) => {
   expect(await marked(page)).toBe(true);
 });
 
-for (const [width, height] of [
-  [1440, 900],
-  [390, 844],
-]) {
-  test(`See it selects the space hog in the largest files at ${width} px`, async ({ page }) => {
-    await page.setViewportSize({ width, height });
-    await page.goto("/");
-    await page.locator("#see-space").click();
-    expect((await waitForOutcome(page)).outcome).toBe("complete");
-    const selected = page.locator('#list-viewport [role=row][aria-selected="true"]');
-    await expect(selected).toHaveAttribute("data-block", "true");
-    await expect(selected.locator('[data-part="label"]')).toHaveText("debug/demo-app.debug");
-    await expect(page.locator("#list-viewport")).toBeFocused();
-    // The ring shows after the move, also after a pointer click.
-    expect(
-      await page.locator("#list-viewport").evaluate((el) => el.matches(":focus-visible")),
-    ).toBe(true);
-  });
-}
-
-for (const [width, height] of [
-  [1280, 560],
-  [800, 500],
-  [390, 560],
-]) {
-  test(`See it selects the folder of the hog with no largest files at ${width} x ${height}`, async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width, height });
-    await page.goto("/");
-    await page.locator("#see-space").click();
-    expect((await waitForOutcome(page)).outcome).toBe("complete");
-    const selected = page.locator('#list-viewport [role=row][aria-selected="true"]');
-    await expect(selected.locator('[data-part="label"]')).toHaveText("debug/");
-    await expect(page.locator("#list-viewport")).toBeFocused();
-    // A later resize does not move the selection.
-    await page.locator("#search-input").focus();
-    await page.setViewportSize({ width, height: 900 });
-    // The wait is a part of the test: the resize must not move the selection.
-    await page.waitForTimeout(300);
-    await expect(selected.locator('[data-part="label"]')).toHaveText("debug/");
-    await expect(page.locator("#search-input")).toBeFocused();
-  });
-}
-
-test("Back and Forward keep the hog selected after See it", async ({ page }) => {
+test("the picture of the sample shows in the preview", async ({ page }) => {
   await page.goto("/");
-  await page.locator("#see-space").click();
+  await page.locator("#door-shot-button").click();
   expect((await waitForOutcome(page)).outcome).toBe("complete");
-  const label = page.locator('#list-viewport [role=row][aria-selected="true"] [data-part="label"]');
-  await expect(label).toHaveText("debug/demo-app.debug");
-  await page.goBack();
-  await expect(page.locator("#front-door")).toHaveAttribute("data-state", "return");
-  // The wait is a part of the test: the hidden table must not move the selection.
-  await page.waitForTimeout(200);
-  await page.goForward();
-  await expect(page.locator("#front-door")).toHaveCount(0);
-  await expect(label).toHaveText("debug/demo-app.debug");
+  await page.locator("#search-input").fill("demo-app.svg");
+  const row = page.locator("#list-viewport [role=row]", { hasText: "demo-app.svg" }).first();
+  await row.click();
+  await page.keyboard.press("Enter");
+  const picture = page.locator("#preview-pane img");
+  await expect(picture).toBeVisible();
+  await expect.poll(() => picture.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(256);
 });
 
-test("See it opens the health list", async ({ page }) => {
-  await page.goto("/");
-  await page.locator("#see-health").click();
-  expect((await waitForOutcome(page)).outcome).toBe("complete");
-  await expect(page.locator("#health-panel [data-finding]")).toHaveCount(2);
-  await expect(page.locator("#health-toggle")).toHaveAttribute("aria-expanded", "true");
-  await expect(page.locator("#health-toggle")).toBeFocused();
-  expect(await page.locator("#health-toggle").evaluate((el) => el.matches(":focus-visible"))).toBe(
-    true,
-  );
-});
-
-test("the control that starts the sample is busy, and a second control takes its place", async ({
+test("the picture is busy while the sample is made, and a second click does no more", async ({
   page,
 }) => {
   const gate = Promise.withResolvers<void>();
@@ -810,19 +632,15 @@ test("the control that starts the sample is busy, and a second control takes its
     await route.continue();
   });
   await page.goto("/");
-  await page.locator("#see-health").click();
-  await expect(page.locator("#see-health")).toHaveAttribute("aria-busy", "true");
+  await page.locator("#door-shot-button").click();
+  await expect(page.locator("#door-shot-button")).toHaveAttribute("aria-busy", "true");
   await expect(page.locator("#status")).toHaveText(front.making);
-  // A second control takes its place and starts no more work.
-  await page.locator("#see-space").click();
-  await expect(page.locator("#see-health")).not.toHaveAttribute("aria-busy", "true");
-  await expect(page.locator("#see-space")).toHaveAttribute("aria-busy", "true");
+  // A second click starts no more work.
+  await page.locator("#door-shot-button").click();
+  await expect(page.locator("#door-shot-button")).toHaveAttribute("aria-busy", "true");
   gate.resolve();
   expect((await waitForOutcome(page)).outcome).toBe("complete");
-  await expect(page.locator('#list-viewport [role=row][aria-selected="true"]')).toHaveAttribute(
-    "data-block",
-    "true",
-  );
+  await expect(page.locator('#list-viewport [role=row][aria-selected="true"]')).toHaveCount(0);
 });
 
 test("a generator that fails says so, and the next try works", async ({ page }) => {
@@ -837,14 +655,14 @@ test("a generator that fails says so, and the next try works", async ({ page }) 
   });
   await page.goto("/");
   await expect(page.locator("#front-door")).toHaveAttribute("data-preloaded", "true");
-  await page.locator("#sample-button").click();
+  await page.locator("#door-shot-button").click();
   await expect(page.locator("#status")).toHaveText(front.sampleFailed);
-  await expect(page.locator("#sample-button")).not.toHaveAttribute("aria-busy", "true");
+  await expect(page.locator("#door-shot-button")).not.toHaveAttribute("aria-busy", "true");
   // Only the two workers of the preload stay: the generator stopped.
   await expect.poll(() => page.workers().length).toBe(2);
   expect(page.workers().filter((worker) => worker.url().includes("sample-worker"))).toEqual([]);
   await page.unrouteAll();
-  await page.locator("#see-contents").click();
+  await page.locator("#door-shot-button").click();
   await expect(page.locator("#status")).not.toHaveText(front.sampleFailed);
   expect((await waitForOutcome(page)).outcome).toBe("complete");
 });
@@ -852,9 +670,9 @@ test("a generator that fails says so, and the next try works", async ({ page }) 
 test("a worker that cannot start says so, and a file still opens", async ({ page }) => {
   await page.route("**/assets/sample-worker-*.js", (route) => route.abort("failed"));
   await page.goto("/");
-  await page.locator("#sample-button").click();
+  await page.locator("#door-shot-button").click();
   await expect(page.locator("#status")).toHaveText(front.sampleFailed);
-  await expect(page.locator("#sample-button")).not.toHaveAttribute("aria-busy", "true");
+  await expect(page.locator("#door-shot-button")).not.toHaveAttribute("aria-busy", "true");
   const path = test.info().outputPath("after.zip");
   writeFileSync(path, storedZip([["a/one.txt", 1]]));
   await openArchive(page, path);
@@ -949,16 +767,7 @@ test("a drop of text before the app starts opens nothing", async ({ page }) => {
   await expect(page.locator("#archive-name")).toHaveCount(0);
 });
 
-test("a file that does not open does not set the flag of the repeat visit", async ({ page }) => {
-  const path = test.info().outputPath("notes.txt");
-  writeFileSync(path, "not a zip archive");
-  await page.goto("/");
-  await openArchive(page, path);
-  expect((await waitForOutcome(page)).outcome).toBe("failed");
-  expect(await page.evaluate(() => localStorage.getItem("zipscope.door"))).toBeNull();
-});
-
-test("a store that refuses the flag does not stop a file", async ({ page }) => {
+test("a store that refuses a write does not stop a file", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.addInitScript(() => {
@@ -981,44 +790,25 @@ test("the sample still extracts after its worker stopped", async ({ page }) => {
     });
   });
   await page.goto("/");
-  await page.locator("#sample-button").click();
+  await page.locator("#door-shot-button").click();
   expect((await waitForOutcome(page)).outcome).toBe("complete");
   await page.getByRole("button", { name: "Extract this folder" }).click();
   await page.locator("#extract-confirm").click();
-  await expect(page.locator("#extract-summary")).toContainText("879 of 879", { timeout: 60_000 });
+  await expect(page.locator("#extract-summary")).toContainText("880 of 880", { timeout: 60_000 });
   await expect(page.locator("#extract-summary")).toContainText("verified");
 });
 
-test("after a first real file, a later visit gets the compact door", async ({ page }) => {
-  await page.goto("/");
-  await page.locator("#sample-button").click();
-  expect((await waitForOutcome(page)).outcome).toBe("complete");
-  // The sample does not count.
-  expect(await page.evaluate(() => localStorage.getItem("zipscope.door"))).toBeNull();
-
+test("after a real file, a later visit gets the same page", async ({ page }) => {
   await openSmall(page);
-  await expect
-    .poll(() => page.evaluate(() => localStorage.getItem("zipscope.door")))
-    .toBe("compact");
   // A new visit: a new tab with no history entry of an archive.
   const next = await page.context().newPage();
   await next.goto("/");
-  await expect(next.locator("html")).toHaveAttribute("data-door", "compact");
   await expect(next.locator("#front-door")).toHaveAttribute("data-state", "first");
-  await expect(next.locator("#door-questions")).toBeHidden();
+  await expect(next.locator("html")).toHaveAttribute("data-door", "first");
+  for (const selector of ["#door-lead", "#door-shot-frame", "#door-bands", "#door-close"]) {
+    await expect(next.locator(selector), selector).toBeVisible();
+  }
   await expect(next.locator("#front-open")).toBeInViewport();
-  await expect(next.locator("#sample-button")).toBeInViewport();
-  await expect(next.locator("#door-action")).toHaveText(door.action.compact, {
-    useInnerText: true,
-  });
-  await expect(next.locator("#door-row")).toHaveCSS("position", "static");
-  await expect(next.locator("#explainer")).toBeVisible();
-  // A drop still works.
-  await next.locator("#front-open").waitFor();
-  const path = test.info().outputPath("again.zip");
-  writeFileSync(path, storedZip([["b/two.txt", 1]]));
-  await openArchive(next, path);
-  expect((await waitForOutcome(next)).outcome).toBe("complete");
   await next.close();
 });
 
@@ -1032,15 +822,10 @@ test("a broken storage does not stop the door", async ({ page }) => {
   });
   await page.goto("/");
   await expect(page.locator("#front-door")).toHaveAttribute("data-state", "first");
-  await expect(page.locator("#door-questions")).toBeVisible();
+  await expect(page.locator("#door-bands")).toBeVisible();
 });
 
-test("the boot script hides the questions before the first paint after a reload", async ({
-  page,
-}) => {
-  await page.addInitScript(() => {
-    Object.defineProperty(window, "showOpenFilePicker", { value: undefined, configurable: true });
-  });
+test("the boot script hides the page before the first paint after a reload", async ({ page }) => {
   await openSmall(page);
   // Hold the entry module, so only the boot script and the CSS apply.
   await page.route("**/assets/index-*.js", () => {});
@@ -1063,7 +848,7 @@ test("a sample that is still in generation does not replace a file opened later"
   const generator = page.waitForEvent("worker", (worker) =>
     worker.url().includes("/assets/sample-"),
   );
-  await page.locator("#sample-button").click();
+  await page.locator("#door-shot-button").click();
   const path = test.info().outputPath("later.zip");
   writeFileSync(path, storedZip([["later/one.txt", 1]]));
   await openArchive(page, path);
@@ -1100,44 +885,22 @@ test("after Back, the door has Return and Open a file", async ({ page }) => {
   const frontDoor = page.locator("#front-door");
   await expect(frontDoor).toHaveAttribute("data-state", "return");
   await expect(page.locator("#return-button")).toHaveText(front.returnTo("small.zip"));
-  await expect(page.locator("#compact-open")).toHaveText(front.open);
-  // No questions, no offline line and nothing below the fold.
-  for (const selector of ["#door-questions", "#front-test", "#explainer"]) {
+  await expect(page.locator("#other-open")).toHaveText(front.openOther);
+  // No poster, no offline line and nothing below the fold.
+  for (const selector of ["#door-hero", "#front-test", "#door-bands"]) {
     await expect(page.locator(selector), selector).toHaveCount(0);
   }
-  // The word mark is a plain element, and the door has the h1.
-  await expect(page.locator("header h1")).toHaveCount(0);
-  await expect(page.locator("#front-door h1")).toHaveText(door.heading);
+  // The top bar does not show, and the door has the h1.
+  await expect(page.locator("header")).toBeHidden();
+  await expect(page.locator("#front-door h1")).toHaveText(HEADING);
   await page.locator("#return-button").click();
   await expect(frontDoor).toHaveCount(0);
   await expect(page.locator("header h1")).toHaveText("Zipscope");
 });
 
-test("after a reload, the door offers to reopen the file", async ({ page }) => {
-  // Without the File System Access picker (as in Firefox and Safari), the
-  // reopen action opens the file input. reload.spec.ts has the picker.
-  await page.addInitScript(() => {
-    Object.defineProperty(window, "showOpenFilePicker", { value: undefined, configurable: true });
-  });
-  await openSmall(page);
-  await page.reload();
-  await expect(page.locator("#front-door")).toHaveAttribute("data-state", "reopen");
-  await expect(page.locator("#reopen-text")).toHaveText(front.reopen);
-  await expect(page.locator("#reopen-button")).toHaveText("small.zip");
-  await expect(page.locator("#compact-open")).toHaveText(front.open);
-  await expect(page.locator("#door-questions")).toHaveCount(0);
-  await expect(page.locator("#explainer")).toHaveCount(0);
-  // The reopen action opens the file picker.
-  const chooser = page.waitForEvent("filechooser");
-  await page.locator("#reopen-button").click();
-  await (await chooser).setFiles(test.info().outputPath("small.zip"));
-  expect((await waitForOutcome(page)).outcome).toBe("complete");
-  await expect(page.locator("#archive-name")).toHaveText("small.zip");
-});
-
 test("after a reload of the demo, the reopen action makes the demo again", async ({ page }) => {
   await page.goto("/");
-  await page.locator("#sample-button").click();
+  await page.locator("#door-shot-button").click();
   expect((await waitForOutcome(page)).outcome).toBe("complete");
   await page.reload();
   const reopen = page.locator("#reopen-button");
@@ -1169,14 +932,12 @@ async function expectUnsupported(page: Page, reason: string): Promise<void> {
   await expect(page.locator("#unsupported-heading")).toHaveText(front.unsupported);
   await expect(page.locator("#unsupported-reason")).toHaveText(reason);
   await expect(page.locator("#unsupported")).toContainText(front.supportedBrowsers);
-  await expect(page.locator("#sample-button")).toHaveCount(0);
-  // The sample answers go. The rest of the page stays. The close asks for a
-  // file, so it goes too.
-  await expect(page.locator("#door-questions")).toHaveCount(0);
+  await expect(page.locator("#door-shot-button")).toHaveCount(0);
+  // The static page goes: its actions need a browser that can read a file.
+  await expect(page.locator("#door-hero")).toHaveCount(0);
   await expect(page.locator("#door-frame")).toHaveCount(0);
-  await page.locator("#explainer").scrollIntoViewIfNeeded();
-  await expect(page.locator("#explainer")).toBeVisible();
-  await expect(page.locator("#door-close")).toBeHidden();
+  await expect(page.locator("#door-bands")).toHaveCount(0);
+  await expect(page.locator("#door-close")).toHaveCount(0);
   await expect(page.locator("header h1")).toHaveText("Zipscope");
   // The app did not run: no tool, no file input, no status bar and no
   // worker preload. The app preloads its workers in idle time, so wait for
