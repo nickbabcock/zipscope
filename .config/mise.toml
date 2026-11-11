@@ -1,6 +1,5 @@
 [tools]
 "github:pnpm/pnpm" = { version = "12.18.0" }
-"node" = { version = "24.22.2" }
 "github:wasm-bindgen/wasm-bindgen" = { version = "0.2.130" } # match Cargo.toml
 "github:WebAssembly/binaryen" = { version = "133", version_prefix = "version_", strip_components = 1, bin_path = "bin" }
 # Compiles the C zstd library to wasm. Apple clang has no WebAssembly target,
@@ -9,6 +8,7 @@
   "macos",
   "windows",
 ] }
+"node" = { version = "24.22.2" }
 
 [tasks.pnpm-install]
 run = "pnpm install --frozen-lockfile"
