@@ -11,15 +11,15 @@
     "test:browser": "vitest run --project browser"
   },
   "dependencies": {
-    "@solidjs/web": "2.0.0-rc.19",
+    "@solidjs/web": "2.0.0-rc.21",
     "@stylexjs/stylex": "0.19.1",
     "comlink": "4.4.2",
-    "solid-js": "2.0.0-rc.19"
+    "solid-js": "2.0.0-rc.21"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.68.0",
     "@playwright/test": "1.65.0",
-    "@solidjs/vite-plugin": "3.0.0-next.51",
+    "@solidjs/vite-plugin": "3.0.0-next.57",
     "@stylexswc/unplugin": "0.20.0",
     "@types/node": "catalog:",
     "@vitest/browser-playwright": "5.1.0",
