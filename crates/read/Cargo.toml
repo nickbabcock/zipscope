@@ -21,7 +21,7 @@ module = []
 
 [dependencies]
 foldhash.workspace = true
-flate2 = { version = "1.1.9", default-features = false, features = ["zlib-rs"] }
+flate2 = { version = "1.1.11", default-features = false, features = ["zlib-rs"] }
 rawzip.workspace = true
 # Full Unicode case folding (CaseFolding.txt, status C and F) for the
 # collision keys of the extraction planner.
@@ -30,12 +30,12 @@ zipscope-heap = { path = "../heap" }
 zipscope-layout = { path = "../layout" }
 zipscope-marks = { path = "../marks" }
 wasm-bindgen.workspace = true
-zstd-safe = { version = "8.0.0", default-features = false }
+zstd-safe = { version = "8.2.0", default-features = false }
 
 [dev-dependencies]
 # Only the tests normalize names; the read wasm gets the NFC form from JS.
 unicode-normalization = "0.1.26"
-zstd = { version = "0.14.0", default-features = false }
+zstd = { version = "0.14.3", default-features = false }
 zipscope-core = { path = "../core" }
 zipscope-testkit = { path = "../testkit" }
 
