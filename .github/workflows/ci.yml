@@ -37,6 +37,8 @@ jobs:
       - run: rustup toolchain install
       - uses: jdx/mise-action@v5
       - run: mise run lint
+      # The fuzz crate has its own lock file. Only the nightly job builds it.
+      - run: cargo metadata --locked --format-version 1 --manifest-path fuzz/Cargo.toml > /dev/null
 
   test:
     runs-on: ubuntu-latest
