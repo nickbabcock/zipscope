@@ -30,12 +30,12 @@ zipscope-heap = { path = "../heap" }
 zipscope-layout = { path = "../layout" }
 zipscope-marks = { path = "../marks" }
 wasm-bindgen.workspace = true
-zstd-safe = { version = "8.2.0", default-features = false }
+zstd-safe = { version = "8.3.0", default-features = false }
 
 [dev-dependencies]
 # Only the tests normalize names; the read wasm gets the NFC form from JS.
 unicode-normalization = "0.1.26"
-zstd = { version = "0.14.3", default-features = false }
+zstd = { version = "0.14.4", default-features = false }
 zipscope-core = { path = "../core" }
 zipscope-testkit = { path = "../testkit" }
 

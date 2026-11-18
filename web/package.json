@@ -11,14 +11,14 @@
     "test:browser": "vitest run --project browser"
   },
   "dependencies": {
-    "@solidjs/web": "2.0.0-rc.21",
-    "@stylexjs/stylex": "0.19.1",
+    "@solidjs/web": "2.0.0-rc.23",
+    "@stylexjs/stylex": "0.19.2",
     "comlink": "4.4.2",
-    "solid-js": "2.0.0-rc.21"
+    "solid-js": "2.0.0-rc.23"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.68.0",
-    "@playwright/test": "1.65.0",
+    "@cloudflare/vite-plugin": "1.69.1",
+    "@playwright/test": "1.65.1",
     "@solidjs/vite-plugin": "3.0.0-next.57",
     "@stylexswc/unplugin": "0.20.0",
     "@types/node": "catalog:",
@@ -26,6 +26,6 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "5.1.0",
-    "wrangler": "4.160.0"
+    "wrangler": "4.163.0"
   }
 }
