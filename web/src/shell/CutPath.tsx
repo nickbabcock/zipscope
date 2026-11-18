@@ -40,15 +40,16 @@ export function CutPath(props: { path: string }) {
     if (room() > 0) return pathTruncate(path, room() - KERNING, widths.measure);
     return { text: path, folder: path.lastIndexOf("/", path.length - 2) + 1 };
   });
+  let observer: ResizeObserver | undefined;
+  onCleanup(() => observer?.disconnect());
   return (
     <span
       ref={(element) => {
-        const observer = new ResizeObserver(() => {
+        observer = new ResizeObserver(() => {
           widths.setFont(fontOf(element));
           setRoom(element.clientWidth);
         });
         observer.observe(element);
-        onCleanup(() => observer.disconnect());
       }}
       title={nameTitle(props.path)}
       {...stylex.attrs(styles.path)}

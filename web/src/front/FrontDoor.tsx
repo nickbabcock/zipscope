@@ -18,17 +18,7 @@
 // A browser that cannot run Zipscope does not load this module. The entry
 // module shows that state (`unsupported.ts`).
 import * as stylex from "@stylexjs/stylex";
-import {
-  createEffect,
-  createSignal,
-  For,
-  getOwner,
-  Match,
-  onSettled,
-  runWithOwner,
-  Show,
-  Switch,
-} from "solid-js";
+import { createEffect, createSignal, For, Match, onSettled, Show, Switch } from "solid-js";
 import { formatSize } from "../format";
 import type { RecentArchive } from "../lifecycle/remember";
 import type { LostArchive } from "../nav/navigation";
@@ -248,23 +238,18 @@ export function FrontDoor(props: FrontDoorProps) {
     </button>
   );
 
-  /** The owner of the door. A `ref` runs with no owner, and the controls that
-   *  it draws must go with the door. */
-  const owner = getOwner();
   /** Moves the static page into the door, and draws the controls in its
    *  reserved slots. A later door draws new controls in the same slots. */
-  const placeFirst = (slot: HTMLElement) => {
-    if (staticPage === null) return;
+  const FirstContent = () => {
+    if (staticPage === null) return null;
     const fill = (id: string, ...nodes: unknown[]) =>
       staticPage.querySelector(`#${id}`)?.replaceChildren(...(nodes as Node[]));
-    runWithOwner(owner, () => {
-      fill("door-buttons", openButton(true, "front-open"));
-      fill("door-close-buttons", openButton(true, "close-open"));
-      fill("door-recent", recentList());
-      const picture = staticPage.querySelector("#door-shot picture");
-      if (picture !== null) fill("door-shot", shotButton(picture));
-    });
-    slot.append(staticPage);
+    fill("door-buttons", openButton(true, "front-open"));
+    fill("door-close-buttons", openButton(true, "close-open"));
+    fill("door-recent", recentList());
+    const picture = staticPage.querySelector("#door-shot picture");
+    if (picture !== null) fill("door-shot", shotButton(picture));
+    return staticPage;
   };
   // The offline line is true only after the preload. Until then its element
   // is empty and does not show.
@@ -300,7 +285,9 @@ export function FrontDoor(props: FrontDoorProps) {
       />
       <Switch>
         <Match when={props.door.kind === "first"}>
-          <div {...stylex.attrs(styles.contents)} ref={placeFirst} />
+          <div {...stylex.attrs(styles.contents)}>
+            <FirstContent />
+          </div>
         </Match>
         <Match when={props.door.kind === "return" && props.door}>
           {(door) => (

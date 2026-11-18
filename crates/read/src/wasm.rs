@@ -806,8 +806,7 @@ impl ReadArchive {
     pub fn zip_take(&mut self, max_bytes: u32) -> Vec<u8> {
         self.zip
             .as_mut()
-            .map(|zip| zip.take(max_bytes as usize))
-            .unwrap_or_default()
+            .map_or_default(|zip| zip.take(max_bytes as usize))
     }
 
     /// The output bytes of the zip that `zipTake` did not give yet.
