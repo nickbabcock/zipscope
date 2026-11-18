@@ -4,7 +4,7 @@
 "github:WebAssembly/binaryen" = { version = "133", version_prefix = "version_", strip_components = 1, bin_path = "bin" }
 # Compiles the C zstd library to wasm. Apple clang has no WebAssembly target,
 # and Windows has no clang by default.
-"github:WebAssembly/wasi-sdk" = { version = "wasi-sdk-34", strip_components = 1, bin_path = "bin", os = [
+"github:WebAssembly/wasi-sdk" = { version = "wasi-sdk-29", strip_components = 1, bin_path = "bin", os = [
   "macos",
   "windows",
 ] }
