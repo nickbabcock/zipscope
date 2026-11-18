@@ -1,4 +1,4 @@
-// The four sample controls under the development server. Only a development
+// The sample control under the development server. Only a development
 // build of Solid has the guards that find a signal write in a component body,
 // and the other specs run against the production build. A write of this kind
 // halts the app in development and has no effect in production, so only this
@@ -23,10 +23,6 @@ function freePort(): Promise<number> {
     });
   });
 }
-
-/** A warning of the tool that this spec does not judge: `onCleanup` in a `ref`
- *  of the breadcrumb and the strip. It does not stop the app. */
-const KNOWN = /^\[NO_OWNER_CLEANUP\]/;
 
 test.describe.configure({ mode: "serial", timeout: 180_000 });
 
@@ -90,7 +86,7 @@ for (const id of ["door-shot-button"]) {
     await page.locator(`#${id}`).click({ timeout: 60_000 });
     expect((await waitForOutcome(page)).outcome).toBe("complete");
     await expect(page.locator("#panes")).toBeVisible();
-    expect(messages.filter((text) => /^\[[A-Z_]+\]/.test(text) && !KNOWN.test(text))).toEqual([]);
+    expect(messages.filter((text) => /^\[[A-Z_]+\]/.test(text))).toEqual([]);
     expect(errors).toEqual([]);
   });
 }
@@ -122,6 +118,6 @@ test("a search, a header click and a clear give no new warning of the reactive s
   );
   await search.fill("");
   await expect(page.locator("#sort-status")).toHaveText("");
-  expect(messages.filter((text) => /^\[[A-Z_]+\]/.test(text) && !KNOWN.test(text))).toEqual([]);
+  expect(messages.filter((text) => /^\[[A-Z_]+\]/.test(text))).toEqual([]);
   expect(errors).toEqual([]);
 });

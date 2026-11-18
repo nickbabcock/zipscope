@@ -482,14 +482,15 @@ function HexView(props: { bytes: Uint8Array; view: Window }) {
       text: column((line) => line.slice(bar(line))),
     };
   });
+  let observer: ResizeObserver | undefined;
+  onCleanup(() => observer?.disconnect());
   return (
     <div
       ref={(element) => {
         // The observer of the window that shows the view: the popup has its own.
         const view = props.view as unknown as typeof globalThis;
-        const observer = new view.ResizeObserver(() => setWidth(element.clientWidth));
+        observer = new view.ResizeObserver(() => setWidth(element.clientWidth));
         observer.observe(element);
-        onCleanup(() => observer.disconnect());
       }}
     >
       <Show when={columns()}>

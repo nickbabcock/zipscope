@@ -175,16 +175,17 @@ export function Breadcrumb(props: BreadcrumbProps) {
   const off = (index: number) => props.stopped && !last(index);
 
   let more: HTMLDivElement | undefined;
+  let observer: ResizeObserver | undefined;
+  onCleanup(() => observer?.disconnect());
   return (
     <nav
       ref={(el) => {
-        const observer = new ResizeObserver(() => {
+        observer = new ResizeObserver(() => {
           // The text font of the location, for the widths of the segments.
           widths.setFont(fontOf(el));
           setRoom(el.clientWidth);
         });
         observer.observe(el);
-        onCleanup(() => observer.disconnect());
       }}
       id="location"
       aria-label="Location"
