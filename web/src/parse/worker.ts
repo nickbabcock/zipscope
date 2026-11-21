@@ -1,5 +1,5 @@
 // The parse worker. One worker per archive; the UI terminates it when the
-// archive closes, which also frees the leaked rawzip iterator.
+// archive closes.
 import * as Comlink from "comlink";
 import {
   HARD_BUDGET_BYTES,

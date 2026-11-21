@@ -1,6 +1,6 @@
 //! Central-directory iteration into the store, in batches.
 
-use rawzip::{ReaderAt, ZipArchive, ZipEntries, ZipFileHeaderRecord};
+use rawzip::{ReaderAt, ZipArchive, ZipFileHeaderRecord};
 use zipscope_layout::end::{EndNotes, EndReader, OpenedEnd, open_end};
 
 use crate::contract::{CHUNK_BYTES, Column, ENTRIES_BUFFER_BYTES, NameSource, health, marks};
@@ -23,22 +23,6 @@ pub enum Status {
     Complete,
     /// Parsing stopped with an error. The rows before the error stay.
     Failed(String),
-}
-
-/// Interim until rawzip has a resumable cursor. A batch must
-/// keep the entries iterator alive across calls from JS, but the iterator
-/// borrows the archive and the buffer.
-///
-/// This function leaks both to get a `'static` iterator. Each archive has
-/// its own worker. The worker stops when the archive closes, so the wasm
-/// instance gives the memory back.
-fn leak_entries<R: ReaderAt + 'static>(
-    archive: ZipArchive<R>,
-    buffer: Vec<u8>,
-) -> (&'static ZipArchive<R>, ZipEntries<'static, 'static, R>) {
-    let archive: &'static ZipArchive<R> = Box::leak(Box::new(archive));
-    let buffer: &'static mut [u8] = Box::leak(buffer.into_boxed_slice());
-    (archive, archive.entries(buffer))
 }
 
 /// The reads for the rows of an archive of the wrapped shape. One read costs
@@ -80,6 +64,37 @@ struct Place {
     offset: u64,
     /// True when the offset is not the one that rawzip gives.
     wrapped: bool,
+}
+
+/// Returns false when the next entry can allocate a page or a chunk
+/// that does not fit in the part of `max_bytes` that is not `used`.
+/// Then the call stops, and the next call starts with that entry.
+///
+/// Most archives have no comments, so the first chunk of the comment
+/// arena counts only when it fits in `max_bytes`. Else, near the hard
+/// stop, each call of an archive without comments would add only one
+/// row. Near the hard stop, that chunk and its mirror cannot fit, so
+/// the first comment then stops the parse.
+fn room_for_next(store: &Store, used: usize, max_bytes: usize) -> bool {
+    let mut bound = store.next_growth_bound();
+    if !store.has_comment_chunk() && CHUNK_BYTES < max_bytes {
+        bound += CHUNK_BYTES;
+    }
+    used.saturating_add(bound) < max_bytes
+}
+
+/// Adds the last row of the store to the tree. Returns the `marks` bits
+/// of the tree limits that moved the row.
+fn add_to_tree(store: &Store, tree: &mut Tree) -> u8 {
+    let row = store.rows() - 1;
+    tree.insert(
+        store.names(),
+        u32::try_from(row).expect("rows fit in u32"),
+        store.name(row),
+        store.name_offset(row),
+        store.value(row, Column::UncompressedSize),
+        store.value(row, Column::CompressedSize),
+    )
 }
 
 /// Decodes one central-directory record and adds it to the store. Returns
@@ -172,9 +187,14 @@ const COUNT_WRAP: u64 = 1 << 16;
 
 /// Reads the central directory of one archive into a store.
 #[derive(Debug)]
-pub struct Ingest<R: 'static> {
-    archive: &'static ZipArchive<EndReader<R>>,
-    entries: ZipEntries<'static, 'static, EndReader<R>>,
+pub struct Ingest<R> {
+    archive: ZipArchive<EndReader<R>>,
+    /// The buffer of the entries iterator. Each `parse` call makes a new
+    /// iterator from `next_record`, because an iterator borrows the
+    /// archive and the buffer.
+    buffer: Vec<u8>,
+    /// The offset of the first record that `parse` has not read.
+    next_record: u64,
     /// What the walk to the end record saw.
     end_notes: EndNotes,
     /// The end records before the chosen record with a directory, as places of
@@ -199,7 +219,7 @@ pub struct Ingest<R: 'static> {
     probes: Option<R>,
 }
 
-impl<R: ReaderAt + 'static> Ingest<R> {
+impl<R: ReaderAt> Ingest<R> {
     /// Finds the end of the central directory of an archive of `size` bytes.
     ///
     /// # Errors
@@ -275,10 +295,10 @@ impl<R: ReaderAt + 'static> Ingest<R> {
         // When the budget has no room, `refused()` stops the parse.
         let _: Result<(), zipscope_heap::Full> =
             health.reserve(usize::try_from(reserve).unwrap_or(0));
-        let (archive, entries) = leak_entries(archive, buffer);
         Ok(Ingest {
             archive,
-            entries,
+            buffer,
+            next_record: directory_offset,
             end_notes,
             earlier,
             locator,
@@ -329,16 +349,19 @@ impl<R: ReaderAt + 'static> Ingest<R> {
     pub fn parse_within(&mut self, max_entries: u32, max_bytes: usize) -> u32 {
         let mut added = 0;
         let mut used = 0_usize;
+        let mut entries = self
+            .archive
+            .entries_from(&mut self.buffer, self.next_record);
         // After the budget refused a growth, the worker stops at the hard
         // stop. The status stays `Parsing`: the stop is not a parse error.
         while added < max_entries
             && self.status == Status::Parsing
             && used < max_bytes
-            && (added == 0 || self.room_for_next(used, max_bytes))
+            && (added == 0 || room_for_next(&self.store, used, max_bytes))
             && !zipscope_heap::refused()
             && !self.views.tree_order_started()
         {
-            match self.entries.next_entry() {
+            match entries.next_entry() {
                 Ok(Some(entry)) => {
                     self.last_record_offset = entry.central_directory_offset();
                     let store_bytes = self.store.allocated_bytes();
@@ -378,7 +401,7 @@ impl<R: ReaderAt + 'static> Ingest<R> {
                         )
                     });
                     let text = facts.text_bytes;
-                    let limits = self.add_to_tree();
+                    let limits = add_to_tree(&self.store, &mut self.tree);
                     self.health.add(&mut self.store, facts, limits);
                     added += 1;
                     used = used
@@ -390,6 +413,7 @@ impl<R: ReaderAt + 'static> Ingest<R> {
                 Err(err) => self.status = Status::Failed(err.to_string()),
             }
         }
+        self.next_record = entries.next_offset();
         if self.status != Status::Parsing
             && self.store.rows() <= 16_384
             && !zipscope_heap::refused()
@@ -399,38 +423,6 @@ impl<R: ReaderAt + 'static> Ingest<R> {
             self.finish_checks_step(INLINE_CHECK_UNITS);
         }
         added
-    }
-
-    /// Returns false when the next entry can allocate a page or a chunk
-    /// that does not fit in the part of `max_bytes` that is not `used`.
-    /// Then the call stops, and the next call starts with that entry.
-    ///
-    /// Most archives have no comments, so the first chunk of the comment
-    /// arena counts only when it fits in `max_bytes`. Else, near the hard
-    /// stop, each call of an archive without comments would add only one
-    /// row. Near the hard stop, that chunk and its mirror cannot fit, so
-    /// the first comment then stops the parse.
-    fn room_for_next(&self, used: usize, max_bytes: usize) -> bool {
-        let mut bound = self.store.next_growth_bound();
-        if !self.store.has_comment_chunk() && CHUNK_BYTES < max_bytes {
-            bound += CHUNK_BYTES;
-        }
-        used.saturating_add(bound) < max_bytes
-    }
-
-    /// Adds the last row of the store to the tree. Returns the `marks` bits
-    /// of the tree limits that moved the row.
-    fn add_to_tree(&mut self) -> u8 {
-        let store = &self.store;
-        let row = store.rows() - 1;
-        self.tree.insert(
-            store.names(),
-            u32::try_from(row).expect("rows fit in u32"),
-            store.name(row),
-            store.name_offset(row),
-            store.value(row, Column::UncompressedSize),
-            store.value(row, Column::CompressedSize),
-        )
     }
 
     /// Runs the checks that need all rows: the duplicate check, and the

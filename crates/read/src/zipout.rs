@@ -482,11 +482,15 @@ mod tests {
             let name = String::from_utf8(record.name.clone()).unwrap();
             let wayfinder = located.wayfinder;
             let data = if decode {
-                Data::Decoded(Stream::open(directory.archive(), row, located, &record).unwrap())
+                Data::Decoded(
+                    Stream::open(directory.archive(), directory.data(), row, located, &record)
+                        .unwrap(),
+                )
             } else {
                 let entry = directory.archive().get_entry(wayfinder).unwrap();
+                let (start, end) = entry.compressed_data_range();
                 Data::Raw {
-                    reader: Box::new(entry.reader()),
+                    reader: Box::new(rawzip::RangeReader::new(directory.data(), start..end)),
                     method: record.method,
                     compressed: wayfinder.compressed_size_hint(),
                 }

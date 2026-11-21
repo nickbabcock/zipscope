@@ -23,7 +23,7 @@ use std::cell::RefCell;
 use std::io::Read;
 use std::rc::Rc;
 
-use rawzip::{ReaderAt, ZipArchive, ZipLocator};
+use rawzip::{RangeReader, ReaderAt, ZipArchive, ZipLocator};
 use zipscope_read::directory::Located;
 use zipscope_read::local::{self, Record, mismatch};
 use zipscope_read::stream::{OpenError, Status, Stream, method};
@@ -293,14 +293,11 @@ struct Job {
 }
 
 /// Decodes entries and writes their new data, one entry at a time.
-pub struct Encoder<R: 'static> {
-    /// The job goes first: its streams borrow `archive`.
+pub struct Encoder<R> {
     job: Option<Job>,
-    /// SAFETY invariant: this reference comes from `owned`, which is
-    /// never moved or freed while it lives. The streams of `job` borrow
-    /// it, and `Drop` drops `job` first.
-    archive: &'static ZipArchive<Virtual<R>>,
-    owned: std::ptr::NonNull<ZipArchive<Virtual<R>>>,
+    /// The virtual archive over a shared reader: the streams of `job` own
+    /// a reader of the data, so they do not borrow the archive.
+    archive: ZipArchive<Rc<Virtual<R>>>,
     overlay: Rc<RefCell<Overlay>>,
     record_offset: u64,
 }
@@ -310,16 +307,6 @@ impl<R> std::fmt::Debug for Encoder<R> {
         f.debug_struct("Encoder")
             .field("job", &self.job.as_ref().map(|job| &job.state))
             .finish_non_exhaustive()
-    }
-}
-
-impl<R: 'static> Drop for Encoder<R> {
-    fn drop(&mut self) {
-        // The streams borrow the archive, so they go first.
-        self.job = None;
-        // SAFETY: `owned` comes from `Box::leak` in `open`, and the job
-        // that borrowed it is gone.
-        drop(unsafe { Box::from_raw(self.owned.as_ptr()) });
     }
 }
 
@@ -443,24 +430,19 @@ impl<R: ReaderAt + 'static> Encoder<R> {
     pub fn open(reader: R, size: u64) -> Result<Self, String> {
         let overlay = Rc::new(RefCell::new(Overlay::default()));
         let mut buffer = zipscope_heap::try_buffer(LOCATE_BYTES).map_err(|err| err.to_string())?;
-        let virtual_archive = Virtual {
+        let virtual_archive = Rc::new(Virtual {
             real: reader,
             size,
             overlay: Rc::clone(&overlay),
-        };
+        });
         let record_offset = virtual_archive.record_offset();
         let length = virtual_archive.length();
         let archive = ZipLocator::new()
             .locate_in_reader(virtual_archive, &mut buffer, length)
             .map_err(|(_, err)| format!("The archive cannot be read: {err}"))?;
-        let owned = std::ptr::NonNull::from(Box::leak(Box::new(archive)));
-        // SAFETY: see the invariant on `Encoder::archive`. `Drop` frees
-        // the box after the job.
-        let archive: &'static ZipArchive<Virtual<R>> = unsafe { owned.as_ref() };
         Ok(Encoder {
             job: None,
             archive,
-            owned,
             overlay,
             record_offset,
         })
@@ -525,20 +507,22 @@ impl<R: ReaderAt + 'static> Encoder<R> {
             wayfinder,
             record_offset: self.record_offset,
         };
-        let check = local::check(self.archive, located)
+        let check = local::check(&self.archive, located)
             .map_err(|err| local_header(format!("The local header cannot be read: {err}")))?;
         if check.mismatches & (mismatch::NAME | mismatch::SIZES | mismatch::METHOD) != 0 {
             return Err(local_header(
                 "The local header does not agree with the central directory".to_string(),
             ));
         }
-        let stream = Stream::open_with_window(self.archive, row, located, &check.record, window)
-            .map_err(|err| match err {
-                OpenError::Encrypted => (skip::ENCRYPTED, err.to_string()),
-                OpenError::Unsupported(_) => (skip::METHOD, err.to_string()),
-                OpenError::Archive(_) => (skip::LOCAL_HEADER, err.to_string()),
-                OpenError::Decode(_) => (skip::VERIFY, err.to_string()),
-            })?;
+        let data = Rc::clone(self.archive.get_ref());
+        let stream =
+            Stream::open_with_window(&self.archive, data, row, located, &check.record, window)
+                .map_err(|err| match err {
+                    OpenError::Encrypted => (skip::ENCRYPTED, err.to_string()),
+                    OpenError::Unsupported(_) => (skip::METHOD, err.to_string()),
+                    OpenError::Archive(_) => (skip::LOCAL_HEADER, err.to_string()),
+                    OpenError::Decode(_) => (skip::VERIFY, err.to_string()),
+                })?;
         let declared = wayfinder.uncompressed_size_hint();
         let source_zstd = matches!(check.record.method, method::ZSTD | method::ZSTD_OLD);
         self.job = Some(Job {
@@ -568,7 +552,7 @@ impl<R: ReaderAt + 'static> Encoder<R> {
     /// in the verify pass). `window` limits the Zstandard window of a
     /// source frame that starts in this step.
     pub fn step(&mut self, max: usize, window: u64) -> Vec<u8> {
-        let archive = self.archive;
+        let archive = &self.archive;
         let Some(job) = self.job.as_mut() else {
             return Vec::new();
         };
@@ -742,7 +726,7 @@ impl Job {
     /// One step of the output pass.
     fn write<R: ReaderAt + 'static>(
         &mut self,
-        archive: &'static ZipArchive<Virtual<R>>,
+        archive: &ZipArchive<Rc<Virtual<R>>>,
         max: usize,
         window: u64,
     ) -> Result<Vec<u8>, String> {
@@ -762,14 +746,17 @@ impl Job {
                     let entry = archive
                         .get_entry(self.located.wayfinder)
                         .map_err(|err| format!("The entry data cannot be found: {err}"))?;
+                    let (start, end) = entry.compressed_data_range();
+                    let data = Rc::clone(archive.get_ref());
                     Output::Raw {
-                        reader: Box::new(entry.reader()),
+                        reader: Box::new(RangeReader::new(data, start..end)),
                         left: self.compressed,
                     }
                 }
                 Plan::Zstd | Plan::Stored => {
                     let stream = Stream::open_with_window(
                         archive,
+                        Rc::clone(archive.get_ref()),
                         self.row,
                         self.located,
                         &self.record,

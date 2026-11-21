@@ -352,7 +352,6 @@ pub const NO_RECORD: &str = "The end of this file looks like a zip end record, b
                              cannot be used. The file can be cut off or damaged, or it is not a \
                              zip archive";
 const NO_SIGNATURE: &str = "Missing end of central directory";
-const INVALID: &str = "Invalid end of central directory";
 
 /// The files of all the shapes.
 ///
@@ -893,17 +892,21 @@ pub fn shapes() -> Vec<Shape> {
         zip64(b"", &stray_text),
         skipped(opens(z64_eocd, 45, &["a.txt"]), 1),
     );
-    // Rawzip has no prefix repair for Zip64 (R1 in the rawzip notes): this file
-    // stays as it is with rawzip alone.
+    // Data before a Zip64 archive: rawzip finds the Zip64 record before the
+    // locator and adds the prefix to the offsets.
+    let prefix = b"prefix-bytes";
+    let z64_prefix = zip64(prefix, b"");
+    let z64_prefix_eocd = z64_prefix.len() as u64 - END_BYTES;
+    let z64_prefix_directory = 45 + prefix.len() as u64;
     add(
         "zip64-prefix",
-        zip64(b"prefix-bytes", b""),
-        Want::Fails(INVALID),
+        z64_prefix,
+        opens(z64_prefix_eocd, z64_prefix_directory, &["a.txt"]),
     );
     add(
         "zip64-prefix-stray",
-        zip64(b"prefix-bytes", &stray_text),
-        Want::Fails(INVALID),
+        zip64(prefix, &stray_text),
+        skipped(opens(z64_prefix_eocd, z64_prefix_directory, &["a.txt"]), 1),
     );
 
     // A Zip64 record that holds a fake record at the far end of its longest

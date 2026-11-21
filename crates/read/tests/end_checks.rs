@@ -23,7 +23,7 @@ fn stream(mut entry: Entry) -> Stream {
         0
     );
     let record = local::read_record(directory.archive(), located).unwrap();
-    Stream::open(directory.archive(), 0, located, &record).unwrap()
+    Stream::open(directory.archive(), directory.data(), 0, located, &record).unwrap()
 }
 
 fn drain(stream: &mut Stream, maximum: usize) -> Vec<u8> {

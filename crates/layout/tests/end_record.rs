@@ -308,7 +308,7 @@ fn a_valid_archive_gets_the_record_of_rawzip_with_no_extra_read() {
     for shape in shapes() {
         if matches!(
             shape.name,
-            "plain" | "comment" | "trailing" | "prefix" | "zip64"
+            "plain" | "comment" | "trailing" | "prefix" | "zip64" | "zip64-prefix"
         ) || shape.name.starts_with("empty-zip")
             || shape.name.starts_with("false-locator")
         {

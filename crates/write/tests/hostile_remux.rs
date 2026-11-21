@@ -661,6 +661,33 @@ fn duplicate_names_keep_each_entry_in_order() {
 }
 
 #[test]
+fn records_larger_than_the_first_record_buffer_keep_their_order() {
+    // The lead reads each record with a buffer of 1 KiB at first, and a
+    // larger record grows it.
+    let mut entries = vec![
+        Entry::stored("short-1.txt", text(100, 1)),
+        Entry::stored("n".repeat(3000), text(200, 2)),
+        Entry::stored("short-2.txt", text(300, 3)),
+        Entry::deflated("comment.txt", text(400, 4)),
+        Entry::stored("short-3.txt", text(500, 5)),
+    ];
+    entries[3].comment = vec![b'c'; usize::from(u16::MAX)];
+    let output = remux(&build(&entries));
+    assert!(
+        output.report.left_out.is_empty(),
+        "{:?}",
+        output.report.left_out
+    );
+    let parsed = parse(&output.bytes);
+    assert_eq!(parsed.records.len(), entries.len());
+    for (entry, record) in entries.iter().zip(&parsed.records) {
+        assert_eq!(record.name, entry.name);
+        assert_eq!(record.comment, entry.comment);
+        assert_eq!(decode(record).as_deref(), Some(entry.body.as_slice()));
+    }
+}
+
+#[test]
 fn records_that_share_one_local_header_do_not_overlap_in_the_output() {
     let mut entries = vec![Entry::deflated("bomb/zeros.bin", vec![0; 1 << 20])];
     for index in 0..3 {
