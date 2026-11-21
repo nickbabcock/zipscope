@@ -73,15 +73,6 @@ impl<'a> RawRecord<'a> {
         })
     }
 
-    /// The length of a record whose fixed part is `fixed`.
-    #[must_use]
-    pub fn length_of(fixed: &[u8; RECORD_FIXED_BYTES]) -> usize {
-        RECORD_FIXED_BYTES
-            + usize::from(le16(fixed, 28))
-            + usize::from(le16(fixed, 30))
-            + usize::from(le16(fixed, 32))
-    }
-
     /// The bytes of the record.
     #[must_use]
     pub fn bytes(&self) -> &'a [u8] {

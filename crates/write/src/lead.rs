@@ -7,7 +7,7 @@
 use std::collections::VecDeque;
 use std::io::Read;
 
-use rawzip::{ReaderAt, ZipArchive, ZipEntries};
+use rawzip::{ErrorKind, ReaderAt, ZipArchive};
 use zipscope_layout::end::{EndReader, open_end};
 use zipscope_read::directory::ENTRIES_BUFFER_BYTES;
 use zipscope_read::stream::supported;
@@ -45,17 +45,22 @@ pub struct Pending {
     pub compressed: u64,
 }
 
-/// Interim until rawzip has a resumable cursor, as in the core
-/// and the read module: the iterator borrows the archive and its buffer,
-/// so both are leaked. The worker stops after the remux, and the wasm
-/// instance gives the memory back.
-fn leak_entries<R: ReaderAt + 'static>(
-    archive: ZipArchive<R>,
-    buffer: Vec<u8>,
-) -> (&'static ZipArchive<R>, ZipEntries<'static, 'static, R>) {
-    let archive: &'static ZipArchive<R> = Box::leak(Box::new(archive));
-    let buffer: &'static mut [u8] = Box::leak(buffer.into_boxed_slice());
-    (archive, archive.entries(buffer))
+/// The first size of the buffer of the record iterator. The lead reads
+/// one record for each call, and a new iterator fills its whole buffer, so
+/// the buffer stays small. It grows to a record that does not fit.
+const RECORD_BUFFER_BYTES: usize = 1024;
+
+/// The fields of a record that the lead keeps.
+struct Found {
+    /// The offset of the record.
+    at: u64,
+    /// The bytes of the record.
+    length: usize,
+    /// The local header offset, with the base.
+    offset: u64,
+    crc32: u32,
+    uncompressed: u64,
+    compressed: u64,
 }
 
 fn read_error(err: impl std::fmt::Display) -> String {
@@ -63,10 +68,13 @@ fn read_error(err: impl std::fmt::Display) -> String {
 }
 
 /// The lead of one remux.
-pub struct Lead<R: 'static> {
+pub struct Lead<R> {
     /// The archive on the reader of the central directory.
-    archive: &'static ZipArchive<EndReader<R>>,
-    entries: ZipEntries<'static, 'static, EndReader<R>>,
+    archive: ZipArchive<EndReader<R>>,
+    /// The buffer of the record iterator.
+    buffer: Vec<u8>,
+    /// The offset of the first record that the lead has not read.
+    next_record: u64,
     /// The reader of the local headers. The browser lead gives a reader with
     /// a window of its own here, so that the reads of the records and of the
     /// local headers do not replace one window for each row.
@@ -86,7 +94,7 @@ impl<R> std::fmt::Debug for Lead<R> {
     }
 }
 
-impl<R: ReaderAt + 'static> Lead<R> {
+impl<R: ReaderAt> Lead<R> {
     /// Finds the end of the central directory of the file and starts the
     /// copy.
     ///
@@ -125,12 +133,12 @@ impl<R: ReaderAt + 'static> Lead<R> {
 
     fn build(records: R, locals: R, size: u64, out: RemuxOut) -> Result<Self, String> {
         let buffer =
-            zipscope_heap::try_buffer(ENTRIES_BUFFER_BYTES).map_err(|err| err.to_string())?;
+            zipscope_heap::try_buffer(RECORD_BUFFER_BYTES).map_err(|err| err.to_string())?;
         let archive = open_end(records, size).map_err(read_error)?.archive;
-        let (archive, entries) = leak_entries(archive, buffer);
         Ok(Lead {
+            next_record: archive.directory_offset(),
             archive,
-            entries,
+            buffer,
             locals,
             queue: VecDeque::new(),
             out,
@@ -198,28 +206,26 @@ impl<R: ReaderAt + 'static> Lead<R> {
             return Ok(false);
         }
         self.queue.try_reserve(1).map_err(|_full| memory())?;
-        let (at, offset, crc32, uncompressed, compressed) = match self.entries.next_entry() {
-            Ok(Some(found)) => (
-                found.central_directory_offset(),
-                found.local_header_offset(),
-                found.crc32(),
-                found.uncompressed_size_hint(),
-                found.compressed_size_hint(),
-            ),
+        let Found {
+            at,
+            length,
+            offset,
+            crc32,
+            uncompressed,
+            compressed,
+        } = match self.next_found() {
+            Ok(Some(found)) => found,
             Ok(None) => {
                 self.ended = true;
                 return Ok(false);
             }
             Err(err) => {
                 self.ended = true;
-                return Err(read_error(err));
+                return Err(err);
             }
         };
         let reader = self.archive.get_ref();
-        let mut fixed = [0u8; RECORD_FIXED_BYTES];
-        reader.read_exact_at(&mut fixed, at).map_err(read_error)?;
-        let mut record =
-            zipscope_heap::try_buffer(RawRecord::length_of(&fixed)).map_err(read_error)?;
+        let mut record = zipscope_heap::try_buffer(length).map_err(read_error)?;
         reader.read_exact_at(&mut record, at).map_err(read_error)?;
         let parsed = RawRecord::parse(&record).map_err(read_error)?;
         let base = parsed
@@ -255,6 +261,44 @@ impl<R: ReaderAt + 'static> Lead<R> {
             compressed,
         });
         Ok(true)
+    }
+
+    /// Reads the record at `next_record`. A record that does not fit the
+    /// buffer grows it, and the record is read again.
+    fn next_found(&mut self) -> Result<Option<Found>, String> {
+        loop {
+            let mut entries = self
+                .archive
+                .entries_from(&mut self.buffer, self.next_record);
+            let required = match entries.next_entry() {
+                Ok(Some(found)) => {
+                    let at = found.central_directory_offset();
+                    let mut fields = Found {
+                        at,
+                        length: 0,
+                        offset: found.local_header_offset(),
+                        crc32: found.crc32(),
+                        uncompressed: found.uncompressed_size_hint(),
+                        compressed: found.compressed_size_hint(),
+                    };
+                    // The record ends where the next one starts, so the
+                    // lead reads its bytes in one read.
+                    self.next_record = entries.next_offset();
+                    fields.length = usize::try_from(self.next_record - at)
+                        .expect("a record is at most 196 KiB");
+                    return Ok(Some(fields));
+                }
+                Ok(None) => return Ok(None),
+                Err(err) => match err.kind() {
+                    ErrorKind::BufferTooSmall { required } if *required > self.buffer.len() => {
+                        *required
+                    }
+                    _ => return Err(read_error(err)),
+                },
+            };
+            self.buffer = zipscope_heap::try_buffer(RECORD_FIXED_BYTES + required)
+                .map_err(|_full| memory())?;
+        }
     }
 
     /// The extra fields of the local header at `offset`, or nothing when

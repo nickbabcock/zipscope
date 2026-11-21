@@ -943,7 +943,7 @@ pub fn open_end<R: ReaderAt>(reader: R, size: u64) -> Result<OpenedEnd<R>, Error
     // No record has a central directory. rawzip opens the nearest one that fits,
     // and the parse reports the error of its directory. When rawzip refuses it
     // after a locator, the words of rawzip stay: that file can be a true Zip64
-    // archive with data before it (R1 in the rawzip notes).
+    // archive.
     let locator = source.has_locator(&record);
     let end = source.search_end(record.offset);
     match locate(source, end) {

@@ -19,7 +19,7 @@ fn open(data: Vec<u8>) -> Directory<Vec<u8>> {
 fn stream(directory: &mut Directory<Vec<u8>>, row: usize) -> Stream {
     let located = directory.locate(row).unwrap();
     let record = local::read_record(directory.archive(), located).unwrap();
-    Stream::open(directory.archive(), row, located, &record).unwrap()
+    Stream::open(directory.archive(), directory.data(), row, located, &record).unwrap()
 }
 
 /// Reads at most `limit` bytes in steps of 64 KiB.
@@ -145,7 +145,7 @@ fn rejects_a_local_header_past_the_end_of_the_file() {
     let located = directory.locate(0).unwrap();
     local::check(directory.archive(), located).unwrap_err();
     let record = local::read_record(directory.archive(), located).unwrap();
-    Stream::open(directory.archive(), 0, located, &record).unwrap_err();
+    Stream::open(directory.archive(), directory.data(), 0, located, &record).unwrap_err();
 }
 
 #[test]
@@ -161,7 +161,8 @@ fn reads_the_rawzip_corpus_without_a_panic() {
             let archive = directory.archive();
             let _ = local::check(archive, located);
             if let Ok(record) = local::read_record(archive, located)
-                && let Ok(mut stream) = Stream::open(archive, row, located, &record)
+                && let Ok(mut stream) =
+                    Stream::open(archive, directory.data(), row, located, &record)
             {
                 let out = read_up_to(&mut stream, 1 << 20);
                 assert!(out.len() <= (1 << 20) + 64 * 1024, "{}", path.display());

@@ -34,7 +34,8 @@ fn a_read_past_the_cap_fails_cleanly() {
     let mut directory = Directory::open(data, size).unwrap();
     let located = directory.locate(0).unwrap();
     let record = local::read_record(directory.archive(), located).unwrap();
-    let mut stream = Stream::open(directory.archive(), 0, located, &record).unwrap();
+    let mut stream =
+        Stream::open(directory.archive(), directory.data(), 0, located, &record).unwrap();
     let mut out = Vec::new();
     let read = with_room(1 << 20, || stream.read(&mut out, 4 << 20));
     assert_eq!(read, 0);
@@ -43,7 +44,8 @@ fn a_read_past_the_cap_fails_cleanly() {
     };
     assert!(message.contains("memory limit"), "{message}");
     // A new stream with room reads the entry.
-    let mut stream = Stream::open(directory.archive(), 0, located, &record).unwrap();
+    let mut stream =
+        Stream::open(directory.archive(), directory.data(), 0, located, &record).unwrap();
     let mut out = Vec::new();
     assert_eq!(stream.read(&mut out, 4 << 20), 4 << 20);
     assert_eq!(stream.status(), &Status::Verified);

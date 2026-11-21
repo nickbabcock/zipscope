@@ -1,6 +1,6 @@
 //! The wasm exports of the read module.
 
-use rawzip::ReaderAt;
+use rawzip::{RangeReader, ReaderAt};
 use wasm_bindgen::prelude::*;
 
 use std::collections::TryReserveError;
@@ -740,16 +740,23 @@ impl ReadArchive {
             ))
         })?;
         let data = if decode {
-            let stream =
-                Stream::open_with_window(archive, index, located, &record, window.max(0.0) as u64)
-                    .map_err(|err| JsError::new(&err.to_string()))?;
+            let stream = Stream::open_with_window(
+                archive,
+                self.directory.data(),
+                index,
+                located,
+                &record,
+                window.max(0.0) as u64,
+            )
+            .map_err(|err| JsError::new(&err.to_string()))?;
             Data::Decoded(stream)
         } else {
             let entry = archive
                 .get_entry(located.wayfinder)
                 .map_err(|err| JsError::new(&format!("The entry data cannot be found: {err}")))?;
+            let (start, end) = entry.compressed_data_range();
             Data::Raw {
-                reader: Box::new(entry.reader()),
+                reader: Box::new(RangeReader::new(self.directory.data(), start..end)),
                 method: record.method,
                 compressed: located.wayfinder.compressed_size_hint(),
             }
@@ -894,7 +901,7 @@ fn open_row(
             return Ok((start, None));
         }
     }
-    match Stream::open_with_window(archive, index, located, &record, window) {
+    match Stream::open_with_window(archive, directory.data(), index, located, &record, window) {
         Ok(stream) => Ok((start, Some(stream))),
         Err(err) => {
             start.error = Some(err.to_string());

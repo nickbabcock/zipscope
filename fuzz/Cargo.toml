@@ -19,7 +19,7 @@ members = ["."]
 
 [dependencies]
 libfuzzer-sys = "0.4.13"
-rawzip = "0.5.2"
+rawzip = "0.5.3"
 zipscope-core = { path = "../crates/core" }
 zipscope-layout = { path = "../crates/layout" }
 

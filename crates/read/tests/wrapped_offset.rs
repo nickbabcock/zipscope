@@ -35,14 +35,13 @@ fn rows_that_read(bytes: &SparseBytes, reads: Option<u32>) -> Vec<String> {
     let mut directory = Directory::open(bytes.clone(), size).unwrap();
     while directory.scan(1024) > 0 {}
     assert_eq!(directory.rows(), store.rows());
-    let archive = directory.archive();
     let mut readable = Vec::new();
     for row in 0..store.rows() {
         if store.marks(row) & marks::WRAPPED_OFFSET != 0 {
             continue;
         }
         let located = directory.locate(row).unwrap();
-        let Ok(entry) = archive.get_entry(located.wayfinder) else {
+        let Ok(entry) = directory.archive().get_entry(located.wayfinder) else {
             continue;
         };
         // The read module reads the data after the local header at the
@@ -70,7 +69,9 @@ fn read_all(spec: &Archive, row: usize) -> (Vec<u8>, Status) {
     let archive = directory.archive();
     let record = local::read_record(archive, located).unwrap();
     assert_eq!(local::check(archive, located).unwrap().mismatches, 0);
-    let mut stream = Stream::open_with_window(archive, row, located, &record, u64::MAX).unwrap();
+    let mut stream =
+        Stream::open_with_window(archive, directory.data(), row, located, &record, u64::MAX)
+            .unwrap();
     let mut out = Vec::new();
     while stream.read(&mut out, 1 << 16) > 0 {}
     (out, stream.status().clone())

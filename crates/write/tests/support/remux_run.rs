@@ -144,7 +144,7 @@ pub fn verify_with_read_module(bytes: &[u8]) -> Vec<Option<Vec<u8>>> {
             found.push(None);
             continue;
         }
-        let mut stream = Stream::open(directory.archive(), row, located, &record)
+        let mut stream = Stream::open(directory.archive(), directory.data(), row, located, &record)
             .unwrap_or_else(|err| panic!("Row {row}: {err}"));
         let mut data = Vec::new();
         for _ in 0..100_000 {

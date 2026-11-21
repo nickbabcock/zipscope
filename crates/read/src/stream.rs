@@ -9,7 +9,7 @@ use std::cell::Cell;
 use std::io::Read;
 use std::rc::Rc;
 
-use rawzip::{ErrorKind, ReaderAt, ZipArchive};
+use rawzip::{ErrorKind, RangeReader, ReaderAt, ZipArchive};
 
 use crate::directory::Located;
 use crate::local::Record;
@@ -146,20 +146,30 @@ fn explain(err: &std::io::Error, produced: u64) -> String {
 }
 
 impl Stream {
-    /// Starts to decode a row.
+    /// Starts to decode a row. `archive` finds the data, and the stream
+    /// reads it through `data`, a reader of the same file that the stream
+    /// owns. Thus the stream does not borrow the archive.
     ///
     /// # Errors
     ///
     /// Returns an error for an encrypted entry, a method that the module does
     /// not decode, a local header that cannot be found or a bad start of
     /// the data.
-    pub fn open<R: ReaderAt + 'static>(
-        archive: &'static ZipArchive<R>,
+    pub fn open<R: ReaderAt, D: ReaderAt + 'static>(
+        archive: &ZipArchive<R>,
+        data: D,
         row: usize,
         located: Located,
         record: &Record,
     ) -> Result<Stream, OpenError> {
-        Self::open_with_window(archive, row, located, record, crate::zstd::MAX_WINDOW_BYTES)
+        Self::open_with_window(
+            archive,
+            data,
+            row,
+            located,
+            record,
+            crate::zstd::MAX_WINDOW_BYTES,
+        )
     }
 
     /// Starts to decode a row, with a Zstandard window of at most `window`
@@ -169,8 +179,9 @@ impl Stream {
     ///
     /// As [`Stream::open`]. Also returns an error for a Zstandard entry when
     /// `window` is less than 1 KiB.
-    pub fn open_with_window<R: ReaderAt + 'static>(
-        archive: &'static ZipArchive<R>,
+    pub fn open_with_window<R: ReaderAt, D: ReaderAt + 'static>(
+        archive: &ZipArchive<R>,
+        data: D,
         row: usize,
         located: Located,
         record: &Record,
@@ -185,7 +196,8 @@ impl Stream {
         let entry = archive
             .get_entry(located.wayfinder)
             .map_err(OpenError::Archive)?;
-        let raw = entry.reader();
+        let (start, end) = entry.compressed_data_range();
+        let raw = RangeReader::new(data, start..end);
         let mut zstd_limit = None;
         let counted = Rc::new(Cell::new(0));
         let total = Rc::clone(&counted);
@@ -368,7 +380,7 @@ mod tests {
         let mut directory = Directory::open(data, size).unwrap();
         let located = directory.locate(row).unwrap();
         let record = read_record(directory.archive(), located).unwrap();
-        Stream::open(directory.archive(), row, located, &record)
+        Stream::open(directory.archive(), directory.data(), row, located, &record)
     }
 
     fn read_all(stream: &mut Stream) -> Vec<u8> {

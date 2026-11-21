@@ -2,10 +2,14 @@
 //!
 //! rawzip gives a wayfinder only from a parsed
 //! central-directory record. Thus the read worker iterates the central
-//! directory one time and keeps one wayfinder for each row. Replace this
-//! pass when rawzip can make a wayfinder from stored fields.
+//! directory one time and keeps one wayfinder for each row (40 bytes). If
+//! that is too much for a large archive, the parse rows could keep the
+//! record offset of each row instead (8 bytes), and the read worker could
+//! parse one record on demand with `ZipArchive::entries_from`.
 
-use rawzip::{ReaderAt, ZipArchive, ZipArchiveEntryWayfinder, ZipEntries};
+use std::rc::Rc;
+
+use rawzip::{ReaderAt, ZipArchive, ZipArchiveEntryWayfinder};
 use zipscope_layout::end::{EndReader, open_end};
 
 /// The rawzip buffer for central-directory records. It is the same as
@@ -46,29 +50,55 @@ pub const CHUNK_BYTES: usize = CHUNK_ROWS * size_of::<Located>();
 /// at a time, never by doubling. Thus one scan step grows the memory by at
 /// most one chunk and the index of chunks, whatever the row count is.
 #[derive(Debug)]
-pub struct Directory<R: 'static> {
-    archive: &'static ZipArchive<EndReader<R>>,
-    entries: ZipEntries<'static, 'static, EndReader<R>>,
+pub struct Directory<R> {
+    /// The archive over a shared reader, so that each stream can own a
+    /// reader of the data ([`Directory::data`]).
+    archive: ZipArchive<EndReader<Rc<R>>>,
+    /// The buffer of the entries iterator. Each `scan` call makes a new
+    /// iterator from `next_record`.
+    buffer: Vec<u8>,
+    /// The offset of the first record that `scan` has not read.
+    next_record: u64,
     chunks: Vec<Vec<Located>>,
     rows: usize,
     scan: Scan,
     size: u64,
 }
 
-/// Interim until rawzip has a resumable cursor, as in the core:
-/// the iterator borrows the archive and its buffer, so both are leaked. The
-/// read worker stops when the archive closes, and the wasm instance gives the
-/// memory back.
-fn leak_entries<R: ReaderAt + 'static>(
-    archive: ZipArchive<R>,
-    buffer: Vec<u8>,
-) -> (&'static ZipArchive<R>, ZipEntries<'static, 'static, R>) {
-    let archive: &'static ZipArchive<R> = Box::leak(Box::new(archive));
-    let buffer: &'static mut [u8] = Box::leak(buffer.into_boxed_slice());
-    (archive, archive.entries(buffer))
+/// The rows that the next growth of the table gives, for a scan of
+/// `wanted` records: the last chunk grows by doubling up to
+/// [`CHUNK_ROWS`], and a full chunk starts a new one.
+fn next_rows(chunks: &[Vec<Located>], wanted: usize) -> (bool, usize) {
+    match chunks.last() {
+        Some(chunk) if chunk.capacity() < CHUNK_ROWS => {
+            let target = (chunk.capacity() * 2)
+                .max(chunk.len() + wanted)
+                .min(CHUNK_ROWS);
+            (false, target - chunk.len())
+        }
+        _ => (true, wanted.clamp(1024, CHUNK_ROWS)),
+    }
 }
 
-impl<R: ReaderAt + 'static> Directory<R> {
+/// Makes room for at least one more row. False when it does not fit
+/// below the memory limit.
+fn grow(chunks: &mut Vec<Vec<Located>>, wanted: usize) -> bool {
+    let (new_chunk, rows) = next_rows(chunks, wanted);
+    if new_chunk {
+        let mut chunk = Vec::new();
+        if chunk.try_reserve_exact(rows).is_err() || chunks.try_reserve(1).is_err() {
+            return false;
+        }
+        chunks.push(chunk);
+        true
+    } else {
+        chunks
+            .last_mut()
+            .is_some_and(|chunk| chunk.try_reserve_exact(rows).is_ok())
+    }
+}
+
+impl<R: ReaderAt> Directory<R> {
     /// Finds the end of the central directory.
     ///
     /// # Errors
@@ -78,13 +108,13 @@ impl<R: ReaderAt + 'static> Directory<R> {
     pub fn open(reader: R, size: u64) -> Result<Self, rawzip::Error> {
         let buffer = crate::heap::try_buffer(ENTRIES_BUFFER_BYTES)
             .map_err(|err| rawzip::Error::from(rawzip::ErrorKind::IO(err)))?;
-        let archive = open_end(reader, size)?.archive;
-        let (archive, entries) = leak_entries(archive, buffer);
+        let archive = open_end(Rc::new(reader), size)?.archive;
         // The table grows only with records that are read. The entry count
         // of the archive is not trusted.
         Ok(Directory {
+            next_record: archive.directory_offset(),
             archive,
-            entries,
+            buffer,
             chunks: Vec::new(),
             rows: 0,
             scan: Scan::Scanning,
@@ -100,15 +130,18 @@ impl<R: ReaderAt + 'static> Directory<R> {
     pub fn scan(&mut self, max_records: u32) -> u32 {
         let mut added = 0;
         let mut grew = false;
+        // The iterator borrows the buffer, and the loop needs `&self`.
+        let mut buffer = std::mem::take(&mut self.buffer);
+        let mut entries = self.archive.entries_from(&mut buffer, self.next_record);
         while added < max_records && self.scan == Scan::Scanning {
             if self.rows == self.capacity() {
                 let wanted = (max_records - added) as usize;
-                if grew || !self.grow(wanted) {
+                if grew || !grow(&mut self.chunks, wanted) {
                     break;
                 }
                 grew = true;
             }
-            match self.entries.next_entry() {
+            match entries.next_entry() {
                 Ok(Some(record)) => {
                     let located = Located {
                         wayfinder: record.wayfinder(),
@@ -124,22 +157,9 @@ impl<R: ReaderAt + 'static> Directory<R> {
                 Err(err) => self.scan = Scan::Failed(err.to_string()),
             }
         }
+        self.next_record = entries.next_offset();
+        self.buffer = buffer;
         added
-    }
-
-    /// The rows that the next growth of the table gives, for a scan of
-    /// `wanted` records: the last chunk grows by doubling up to
-    /// [`CHUNK_ROWS`], and a full chunk starts a new one.
-    fn next_rows(&self, wanted: usize) -> (bool, usize) {
-        match self.chunks.last() {
-            Some(chunk) if chunk.capacity() < CHUNK_ROWS => {
-                let target = (chunk.capacity() * 2)
-                    .max(chunk.len() + wanted)
-                    .min(CHUNK_ROWS);
-                (false, target - chunk.len())
-            }
-            _ => (true, wanted.clamp(1024, CHUNK_ROWS)),
-        }
     }
 
     /// The most bytes that the next scan of `wanted` records allocates: 0
@@ -165,24 +185,6 @@ impl<R: ReaderAt + 'static> Directory<R> {
                 rest.clamp(1024, CHUNK_ROWS) * size_of::<Located>()
                     + index * size_of::<Vec<Located>>()
             }
-        }
-    }
-
-    /// Makes room for at least one more row. False when it does not fit
-    /// below the memory limit.
-    fn grow(&mut self, wanted: usize) -> bool {
-        let (new_chunk, rows) = self.next_rows(wanted);
-        if new_chunk {
-            let mut chunk = Vec::new();
-            if chunk.try_reserve_exact(rows).is_err() || self.chunks.try_reserve(1).is_err() {
-                return false;
-            }
-            self.chunks.push(chunk);
-            true
-        } else {
-            self.chunks
-                .last_mut()
-                .is_some_and(|chunk| chunk.try_reserve_exact(rows).is_ok())
         }
     }
 
@@ -222,10 +224,16 @@ impl<R: ReaderAt + 'static> Directory<R> {
         &self.scan
     }
 
-    /// The archive. It lives until the worker stops.
+    /// The archive.
     #[must_use]
-    pub fn archive(&self) -> &'static ZipArchive<EndReader<R>> {
-        self.archive
+    pub fn archive(&self) -> &ZipArchive<EndReader<Rc<R>>> {
+        &self.archive
+    }
+
+    /// A reader of the file for a stream or a raw copy, which it owns.
+    #[must_use]
+    pub fn data(&self) -> Rc<R> {
+        Rc::clone(self.archive.get_ref().inner())
     }
 
     /// The size of the file.

@@ -20,7 +20,8 @@ fn open(data: Vec<u8>) -> Directory<Vec<u8>> {
 fn first_stream(directory: &mut Directory<Vec<u8>>) -> Result<Stream, String> {
     let located = directory.locate(0).unwrap();
     let record = local::read_record(directory.archive(), located).unwrap();
-    Stream::open(directory.archive(), 0, located, &record).map_err(|err| err.to_string())
+    Stream::open(directory.archive(), directory.data(), 0, located, &record)
+        .map_err(|err| err.to_string())
 }
 
 /// Reads in calls, as the read worker does: each call can start one frame
@@ -253,8 +254,15 @@ mod c {
 fn stream_with_window(directory: &mut Directory<Vec<u8>>, window: u64) -> Result<Stream, String> {
     let located = directory.locate(0).unwrap();
     let record = local::read_record(directory.archive(), located).unwrap();
-    Stream::open_with_window(directory.archive(), 0, located, &record, window)
-        .map_err(|err| err.to_string())
+    Stream::open_with_window(
+        directory.archive(),
+        directory.data(),
+        0,
+        located,
+        &record,
+        window,
+    )
+    .map_err(|err| err.to_string())
 }
 
 #[test]
