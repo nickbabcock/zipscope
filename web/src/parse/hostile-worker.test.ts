@@ -53,6 +53,7 @@ vi.mock("./publish", () => ({
       return mocks.stop ?? this.bytes;
     }
 
+    settle() {}
     shows() {
       return true;
     }

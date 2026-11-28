@@ -112,9 +112,9 @@ describe("mirror publish and read", () => {
       writer.publish(store);
     }
     writer.publish(store);
-    // The growable view mirrors go one time, when the writer is made.
+    // The growable view mirrors go one time, when the writer is made. The
+    // fake store has no folders, so no folder chunk goes.
     expect(sent.map((mirror) => mirror.kind).sort()).toEqual([
-      "folders",
       "nameChunk",
       "page",
       "permutation",

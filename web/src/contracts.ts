@@ -41,7 +41,9 @@
 // rows of the pages received with no gap, and then to the first row whose name
 // chunk has not arrived (a binary search, because the chunk index never
 // decreases). A buffer message can arrive after the count moved into that
-// buffer, so the clamp is necessary. Folders clamp the same way. Copy name
+// buffer, so the clamp is necessary. Folders clamp the same way: the folder
+// table is in chunks that the worker sends one time each, and a record that
+// changes later changes in place. Copy name
 // bytes out of the shared buffer before `TextDecoder`, with `ignoreBOM`.
 //
 // Generation seqlock. The permutations, the flattened trees, the rollups and
@@ -50,6 +52,18 @@
 // loads the generation, reads the active set, and loads the generation again.
 // When it changed, the UI renders again before the browser paints. The worker
 // never writes a set again before it published the other set.
+//
+// View buffers. Each view of a set is a growable buffer with a small
+// `maxByteLength`, because a browser can reserve the address space of the
+// whole `maxByteLength` (Safari does). A view grows in place up to it. Past
+// it, the worker writes the view into a new, larger buffer of the inactive
+// set, adds 1 to the epoch of the set, and sends the buffer with the epoch.
+// It stores `VIEW_EPOCH_n` with the other slots of the set. The message can
+// arrive after the set is published, so the UI reads a set only when the
+// epoch of the last buffer it received for the set is `VIEW_EPOCH_n`. Until
+// then it keeps the last frame. The UI stores the epoch it received in
+// `VIEW_EPOCH_SEEN_n`, and the old buffers stay in the reservation until that
+// epoch reaches the epoch of the set.
 //
 // Cancel. The UI stores 1 in `CANCEL`. Before each batch, the worker loads it,
 // runs the bounded final checks on the prefix, stores `CANCELLED` and resolves
@@ -62,7 +76,7 @@
 // the worker pauses and asks the UI through `sink.confirmMemory`.
 
 /** The version of the shared-memory layout. */
-export const LAYOUT_VERSION = 3;
+export const LAYOUT_VERSION = 4;
 
 /** Int32 slots in the header. */
 export const HEADER_SLOTS = 64;
@@ -134,6 +148,20 @@ export const Header = {
   /** The order of the flattened tree of set 0 and set 1, a `TreeOrder`. */
   TREE_ORDER_0: 27,
   TREE_ORDER_1: 28,
+  /** The buffer epoch of set 0 and set 1: the number of times that a view
+   *  of the set moved to a new buffer. The UI reads a set only with the
+   *  buffers of this epoch (see "View buffers" above). */
+  VIEW_EPOCH_0: 29,
+  VIEW_EPOCH_1: 30,
+  /** The epoch of the last buffer of set 0 and set 1 that the UI received.
+   *  The UI writes it. The worker keeps the old buffers of a set in the
+   *  reservation until it reaches `VIEW_EPOCH_n`. */
+  VIEW_EPOCH_SEEN_0: 31,
+  VIEW_EPOCH_SEEN_1: 32,
+  /** The folders when set 0 and set 1 were written. The UI reads a set only
+   *  when the folder chunks that it has hold them. */
+  VIEW_FOLDERS_0: 33,
+  VIEW_FOLDERS_1: 34,
 } as const;
 
 /** The values of `TREE_ORDER_n`. */
@@ -403,6 +431,12 @@ export function fromFloat32Bits(bits: number): number {
 /** Bytes in one folder record: nameOffset, nameLength, parent, explicitRow
  *  (u32 each). */
 export const FOLDER_RECORD_BYTES = 16;
+/** The folder table is in chunks of `2 ** FOLDER_CHUNK_BITS` records. Each
+ *  chunk is a growable buffer that the worker sends one time. It grows in
+ *  place up to `FOLDER_CHUNK_BYTES`, then the next chunk starts. */
+export const FOLDER_CHUNK_BITS = 16;
+export const FOLDER_CHUNK_RECORDS = 1 << FOLDER_CHUNK_BITS;
+export const FOLDER_CHUNK_BYTES = FOLDER_CHUNK_RECORDS * FOLDER_RECORD_BYTES;
 /** Bytes in one rollup record: uncompressedSize, compressedSize,
  *  entryCount (f64 each). */
 export const ROLLUP_RECORD_BYTES = 24;
@@ -443,11 +477,11 @@ export type Mirror =
   | { kind: "page"; index: number; buffer: SharedArrayBuffer }
   | { kind: "nameChunk"; index: number; buffer: SharedArrayBuffer }
   | { kind: "commentChunk"; index: number; buffer: SharedArrayBuffer }
-  | { kind: "folders"; buffer: SharedArrayBuffer }
-  | { kind: "rollups"; set: 0 | 1; buffer: SharedArrayBuffer }
-  | { kind: "permutation"; set: 0 | 1; buffer: SharedArrayBuffer }
-  | { kind: "permutationInfo"; set: 0 | 1; buffer: SharedArrayBuffer }
-  | { kind: "tree"; set: 0 | 1; buffer: SharedArrayBuffer };
+  | { kind: "folders"; index: number; buffer: SharedArrayBuffer }
+  | { kind: "rollups"; set: 0 | 1; epoch: number; buffer: SharedArrayBuffer }
+  | { kind: "permutation"; set: 0 | 1; epoch: number; buffer: SharedArrayBuffer }
+  | { kind: "permutationInfo"; set: 0 | 1; epoch: number; buffer: SharedArrayBuffer }
+  | { kind: "tree"; set: 0 | 1; epoch: number; buffer: SharedArrayBuffer };
 
 /**
  * The UI side of the control plane. The UI passes it to `open` through

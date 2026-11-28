@@ -74,6 +74,47 @@ describe("drawFrame", () => {
     expect(drawFrame(source, empty, () => {})).toBe(true);
   });
 
+  test("keeps the last frame while a published set waits for a buffer", () => {
+    let pending = true;
+    let commits = 0;
+    const source = {
+      ...noViews,
+      viewsPending: () => pending,
+      state: () => State.COMPLETE,
+      committedRows: () => 5,
+      visibleRows: () => 5,
+    };
+    const render = (): Prepared => ({ complete: true, commit: () => commits++ });
+    expect(drawFrame(source, render, () => {})).toBe(true);
+    expect(commits).toBe(0);
+    pending = false;
+    expect(drawFrame(source, render, () => {})).toBe(false);
+    expect(commits).toBe(1);
+  });
+
+  test("reads again when a publish during a waiting read made another set active", () => {
+    let reads = 0;
+    let commits = 0;
+    const ready = { generation: 2 } as ViewSet;
+    const source = {
+      ...noViews,
+      // The first read waits for a buffer; a publish then made a set active
+      // whose buffers are here.
+      views: () => (reads++ === 0 ? undefined : ready),
+      viewsPending: () => reads === 1,
+      stable: () => true,
+      state: () => State.COMPLETE,
+      committedRows: () => 5,
+      visibleRows: () => 5,
+    };
+    const render = (frame: Frame): Prepared => {
+      expect(frame.views).toBe(ready);
+      return { complete: true, commit: () => commits++ };
+    };
+    expect(drawFrame(source, render, () => {})).toBe(false);
+    expect(commits).toBe(1);
+  });
+
   test("stops after a terminal state with every row visible", () => {
     for (const state of [State.COMPLETE, State.CANCELLED, State.FAILED]) {
       const source = {

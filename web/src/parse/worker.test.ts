@@ -113,7 +113,6 @@ test("publishes view requests after the reader closes", async () => {
   await expect(api.finished()).resolves.toMatchObject({ kind: "complete" });
   expect(() => reader!.readAt(0, new Uint8Array(1))).toThrow("Reader is closed");
   expect(mirror.mock.calls.map(([value]) => value.kind)).toEqual([
-    "folders",
     "rollups",
     "permutation",
     "permutationInfo",

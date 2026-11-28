@@ -5,6 +5,8 @@ import {
   CHUNK_BYTES,
   COLUMN_ID,
   COLUMN_LAYOUT,
+  FOLDER_CHUNK_BITS,
+  FOLDER_CHUNK_RECORDS,
   FOLDER_RECORD_BYTES,
   Header,
   LARGEST_FILES,
@@ -57,6 +59,8 @@ interface ViewBuffers {
   permutation?: SharedArrayBuffer;
   permutationInfo?: SharedArrayBuffer;
   tree?: SharedArrayBuffer;
+  /** The epoch of the last buffer received for the set. */
+  epoch?: number;
 }
 
 /**
@@ -98,6 +102,9 @@ const LARGEST_SLOTS = [Header.LISTING_LARGEST_0, Header.LISTING_LARGEST_1] as co
 const SORT_SLOTS = [Header.LISTING_SORT_0, Header.LISTING_SORT_1] as const;
 const FILES_SLOTS = [Header.LARGEST_FILES_0, Header.LARGEST_FILES_1] as const;
 const TREE_ORDER_SLOTS = [Header.TREE_ORDER_0, Header.TREE_ORDER_1] as const;
+const EPOCH_SLOTS = [Header.VIEW_EPOCH_0, Header.VIEW_EPOCH_1] as const;
+const SEEN_SLOTS = [Header.VIEW_EPOCH_SEEN_0, Header.VIEW_EPOCH_SEEN_1] as const;
+const VIEW_FOLDERS_SLOTS = [Header.VIEW_FOLDERS_0, Header.VIEW_FOLDERS_1] as const;
 
 export class MirrorReader {
   private header: Int32Array | undefined;
@@ -110,12 +117,28 @@ export class MirrorReader {
    *  core counts the true name. */
   private readonly decoder = new TextDecoder("utf-8", { ignoreBOM: true });
   private failedToOpen = false;
-  private folders: SharedArrayBuffer | undefined;
+  /** The chunks of the folder table, by index. */
+  private readonly folders: (SharedArrayBuffer | undefined)[] = [];
+  /** Chunks received with no gap from chunk 0. The worker fills a chunk
+   *  before it sends the next one, so all but the last of them are full. */
+  private folderChunks = 0;
   private readonly sets: [ViewBuffers, ViewBuffers] = [{}, {}];
+  /** See `viewsPending`. */
+  private pending = false;
 
   /** Sets the header from `OpenInfo`. */
   attach(header: SharedArrayBuffer): void {
     this.header = new Int32Array(header);
+    for (const set of [0, 1] as const) this.saw(set);
+  }
+
+  /** Tells the worker the epoch of the buffers of `set` that the UI has, so
+   *  that it can give back the old buffers. */
+  private saw(set: 0 | 1): void {
+    const epoch = this.sets[set].epoch;
+    if (this.header !== undefined && epoch !== undefined) {
+      Atomics.store(this.header, SEEN_SLOTS[set], epoch);
+    }
   }
 
   /** Returns true when the header arrived. Without it, no views come. */
@@ -153,9 +176,14 @@ export class MirrorReader {
     } else if (mirror.kind === "commentChunk") {
       this.comments.receive(mirror.index, mirror.buffer);
     } else if (mirror.kind === "folders") {
-      this.folders = mirror.buffer;
+      this.folders[mirror.index] = mirror.buffer;
+      while (this.folders[this.folderChunks] !== undefined) this.folderChunks++;
     } else {
-      this.sets[mirror.set][mirror.kind] = mirror.buffer;
+      const set = this.sets[mirror.set];
+      set[mirror.kind] = mirror.buffer;
+      // Messages come in order, so this is the newest epoch.
+      set.epoch = mirror.epoch;
+      this.saw(mirror.set);
     }
   }
 
@@ -170,6 +198,7 @@ export class MirrorReader {
    * render: when it returns false, the set changed during the render.
    */
   views(): ViewSet | undefined {
+    this.pending = false;
     const header = this.header;
     if (header === undefined) {
       return undefined;
@@ -189,8 +218,14 @@ export class MirrorReader {
     const files = Math.min(Atomics.load(header, FILES_SLOTS[set]) >>> 0, LARGEST_FILES);
     const { rollups, permutation, permutationInfo, tree } = buffers;
     // `byteLength` of a growable buffer is a sequentially consistent read,
-    // so the growth before the generation store is visible here.
+    // so the growth before the generation store is visible here. A view
+    // that passed its `maxByteLength` moved to a new buffer, and the message
+    // with it can come after the generation store: the set waits for it. A
+    // set also waits for a new folder chunk, so that each folder that it
+    // names is readable.
     if (
+      buffers.epoch !== Atomics.load(header, EPOCH_SLOTS[set]) ||
+      this.folderRecords() < Atomics.load(header, VIEW_FOLDERS_SLOTS[set]) >>> 0 ||
       rollups === undefined ||
       permutation === undefined ||
       permutationInfo === undefined ||
@@ -199,6 +234,7 @@ export class MirrorReader {
       permutationInfo.byteLength < length * 4 ||
       tree.byteLength < treeRows * TREE_RECORD_WORDS * 4
     ) {
+      this.pending = true;
       return undefined;
     }
     return {
@@ -217,6 +253,13 @@ export class MirrorReader {
     };
   }
 
+  /** Returns true when the last `views` call found a published set that
+   *  it could not give, because a buffer of the set had not arrived. It
+   *  reads no slot again, so it agrees with that call. */
+  viewsPending(): boolean {
+    return this.pending;
+  }
+
   /** Returns true when the views did not change after `views` gave `set`. */
   stable(set: ViewSet): boolean {
     return this.generation() === set.generation;
@@ -230,18 +273,13 @@ export class MirrorReader {
    */
   visibleFolders(): number {
     const header = this.header;
-    const buffer = this.folders;
-    if (header === undefined || buffer === undefined) {
+    if (header === undefined) {
       return 0;
     }
-    const records = new Uint32Array(buffer, 0, Math.floor(buffer.byteLength / 4));
-    const count = Math.min(
-      Atomics.load(header, Header.FOLDER_COUNT) >>> 0,
-      Math.floor(buffer.byteLength / FOLDER_RECORD_BYTES),
-    );
+    const count = Math.min(Atomics.load(header, Header.FOLDER_COUNT) >>> 0, this.folderRecords());
     // The root has no name, so it needs no chunk.
     const ready = (folder: number) =>
-      folder === 0 || records[folder * 4]! >>> CHUNK_BITS < this.names.count;
+      folder === 0 || this.folderRecord(folder)[0]! >>> CHUNK_BITS < this.names.count;
     if (count === 0 || ready(count - 1)) {
       return count;
     }
@@ -258,11 +296,25 @@ export class MirrorReader {
     return low;
   }
 
+  /** The folder records in the chunks that arrived with no gap from chunk
+   *  0. Only the last chunk can be partial. A chunk message can arrive
+   *  after the count moved into that chunk, so the count clamps to this. */
+  private folderRecords(): number {
+    const last = this.folders[this.folderChunks - 1];
+    if (last === undefined) return 0;
+    return (
+      (this.folderChunks - 1) * FOLDER_CHUNK_RECORDS +
+      Math.floor(last.byteLength / FOLDER_RECORD_BYTES)
+    );
+  }
+
   private folderRecord(folder: number): Uint32Array {
-    if (this.folders === undefined) {
+    const chunk = this.folders[folder >>> FOLDER_CHUNK_BITS];
+    const at = (folder & (FOLDER_CHUNK_RECORDS - 1)) * FOLDER_RECORD_BYTES;
+    if (chunk === undefined || at + FOLDER_RECORD_BYTES > chunk.byteLength) {
       throw new Error(`Folder ${folder} is not visible`);
     }
-    return new Uint32Array(this.folders, folder * FOLDER_RECORD_BYTES, 4);
+    return new Uint32Array(chunk, at, 4);
   }
 
   /** Returns the name of a visible folder. The root has an empty name. */

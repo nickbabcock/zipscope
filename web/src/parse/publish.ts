@@ -7,6 +7,9 @@ import {
   CHUNK_BYTES,
   COLUMN_ID,
   COLUMN_LAYOUT,
+  FOLDER_CHUNK_BITS,
+  FOLDER_CHUNK_BYTES,
+  FOLDER_CHUNK_RECORDS,
   FOLDER_RECORD_BYTES,
   Header,
   PAGE_BYTES,
@@ -19,11 +22,23 @@ import {
   toFloat32Bits,
 } from "../contracts";
 import type { ColumnLayout, Mirror } from "../contracts";
+import { MemoryLimitError } from "./budget";
 import { StoreReservation } from "./memory";
 
 /** The largest size of one growable mirror: the hard stop of the memory
  *  budget. */
 export const GROWABLE_MAX_BYTES = HARD_BUDGET_BYTES;
+
+/** The first `maxByteLength` of a view buffer. A browser can reserve the
+ *  address space of `maxByteLength` when it makes a growable buffer: Safari
+ *  does, and on iOS a few buffers of the hard stop each use up all of it,
+ *  so that even a small archive cannot open. Thus a view starts small, and a
+ *  view that passes its `maxByteLength` moves to a new buffer. */
+export const VIEW_START_MAX_BYTES = 1 << 20;
+
+/** The factor of the `maxByteLength` of the new buffer of a view that
+ *  passed its `maxByteLength`. Each view then moves few times. */
+const VIEW_MAX_GROWTH = 8;
 
 /** The part of the wasm `Parser` that publishing reads. */
 export interface StoreSource {
@@ -122,6 +137,10 @@ function ensure(buffer: SharedArrayBuffer, bytes: number, memory: StoreReservati
     buffer.grow(size);
   } catch (error) {
     memory.give(growth);
+    // The browser could not give the memory: that is the memory limit too.
+    if (error instanceof RangeError) {
+      throw new MemoryLimitError(memory.stopBytes(), memory.hardBytes);
+    }
     throw error;
   }
 }
@@ -129,6 +148,30 @@ function ensure(buffer: SharedArrayBuffer, bytes: number, memory: StoreReservati
 function growable(maxBytes: number): SharedArrayBuffer {
   return new SharedArrayBuffer(0, { maxByteLength: maxBytes });
 }
+
+/** The `maxByteLength` of the first buffer of a view. */
+function startMax(hardBytes: number): number {
+  return Math.min(VIEW_START_MAX_BYTES, hardBytes);
+}
+
+/** The `maxByteLength` of the next buffer of a view that needs `bytes`
+ *  and passed `current`. A jump past the factor keeps room to grow. */
+function nextMax(current: number, bytes: number, hardBytes: number): number {
+  const wanted = Math.max(bytes * 2, current * VIEW_MAX_GROWTH);
+  return Math.min(hardBytes, Math.ceil(wanted / 65536) * 65536);
+}
+
+/** The buffers of a set, by the kind of their mirror. */
+type ViewKind = "rollups" | "permutation" | "permutationInfo" | "tree";
+const VIEW_KINDS: readonly ViewKind[] = ["rollups", "permutation", "permutationInfo", "tree"];
+
+/** The index in `ViewSet.written` of the version that each buffer holds. */
+const WRITTEN_INDEX: Record<ViewKind, number> = {
+  rollups: 0,
+  permutation: 1,
+  permutationInfo: 1,
+  tree: 2,
+};
 
 /** The buffers of one set of the double-buffered views, and the versions
  *  of the views that they hold. */
@@ -140,6 +183,12 @@ interface ViewSet {
   /** The folder count, the rollup, permutation and tree versions, and the
    *  lengths, of the last write. */
   written: string[];
+  /** The moves of a view of this set to a new buffer (`VIEW_EPOCH_n`). */
+  epoch: number;
+  /** The bytes of the old buffers of the last moves. The UI holds them
+   *  until it gets the new buffers, so they stay in the reservation until
+   *  `VIEW_EPOCH_SEEN_n` reaches `epoch`. */
+  retired: number;
 }
 
 const LENGTH_SLOTS = [
@@ -151,6 +200,9 @@ const LENGTH_SLOTS = [
     sort: Header.LISTING_SORT_0,
     files: Header.LARGEST_FILES_0,
     treeOrder: Header.TREE_ORDER_0,
+    epoch: Header.VIEW_EPOCH_0,
+    seen: Header.VIEW_EPOCH_SEEN_0,
+    folders: Header.VIEW_FOLDERS_0,
   },
   {
     permutation: Header.PERMUTATION_LENGTH_1,
@@ -160,6 +212,9 @@ const LENGTH_SLOTS = [
     sort: Header.LISTING_SORT_1,
     files: Header.LARGEST_FILES_1,
     treeOrder: Header.TREE_ORDER_1,
+    epoch: Header.VIEW_EPOCH_1,
+    seen: Header.VIEW_EPOCH_SEEN_1,
+    folders: Header.VIEW_FOLDERS_1,
   },
 ] as const;
 
@@ -266,8 +321,11 @@ export class MirrorWriter {
   private readonly names: ArenaMirror;
   private readonly comments: ArenaMirror;
   private copiedRows = 0;
-  private readonly folders: SharedArrayBuffer;
+  /** The chunks of the folder table. Only the last one grows. */
+  private readonly folders: SharedArrayBuffer[] = [];
   private copiedFolders = 0;
+  /** The hard stop: no view buffer is larger. */
+  private readonly maxBytes: number;
   private readonly sets: [ViewSet, ViewSet];
   private lastHealth: number[] = [];
   /** The reservation of the store on the shared memory budget. */
@@ -299,25 +357,26 @@ export class MirrorWriter {
       send,
       reserve,
     );
-    const maxBytes = Math.min(hardBytes, GROWABLE_MAX_BYTES);
-    this.folders = growable(maxBytes);
+    this.maxBytes = Math.min(hardBytes, GROWABLE_MAX_BYTES);
+    const start = startMax(this.maxBytes);
     const set = (): ViewSet => ({
-      rollups: growable(maxBytes),
-      permutation: growable(maxBytes),
-      permutationInfo: growable(maxBytes),
-      tree: growable(maxBytes),
+      rollups: growable(start),
+      permutation: growable(start),
+      permutationInfo: growable(start),
+      tree: growable(start),
       written: [],
+      epoch: 0,
+      retired: 0,
     });
     this.sets = [set(), set()];
     Atomics.store(this.header, Header.STORE_KIB, Math.ceil(this.storeBytes() / 1024));
-    // The growable mirrors go to the UI one time. They grow in place.
-    send({ kind: "folders", buffer: this.folders });
+    // The view buffers go to the UI now. They grow in place up to their
+    // `maxByteLength`. Past it, `ensureView` sends a new buffer.
     for (const index of [0, 1] as const) {
       const views = this.sets[index];
-      send({ kind: "rollups", set: index, buffer: views.rollups });
-      send({ kind: "permutation", set: index, buffer: views.permutation });
-      send({ kind: "permutationInfo", set: index, buffer: views.permutationInfo });
-      send({ kind: "tree", set: index, buffer: views.tree });
+      for (const kind of VIEW_KINDS) {
+        send({ kind, set: index, epoch: 0, buffer: views[kind] });
+      }
     }
   }
 
@@ -335,6 +394,7 @@ export class MirrorWriter {
    * no growth. A growth that does not fit still throws.
    */
   publish(source: StoreSource, lastMerge = false): void {
+    this.releaseSeen();
     if (!lastMerge) this.reservation.check();
     // While a build runs, the old listing and its sort stay published. The
     // store knows if the listing as it is now has the best-match order. The
@@ -451,9 +511,13 @@ export class MirrorWriter {
    *  store and the larger of the read worker reservation and its reserve
    *  (see `Reservations`). Thus the hard stop always leaves the reserve
    *  for a preview, also before the read worker starts. The memory in use
-   *  is not more than the reservations. A test can set `READ_KIB` without
+   *  is not more than the reservations, except that near the hard stop a
+   *  view that moved can leave its old buffer with the UI for one message
+   *  (see `ensureView`), and the end of the parse gives back old buffers
+   *  that the UI drops one message later (`settle`). A test can set `READ_KIB` without
    *  a reservation, so that value counts too. */
   stopBytes(): number {
+    this.releaseSeen();
     const stop = this.reservation.stopBytes();
     const counted = this.storeBytes() + this.readBytes();
     return Math.max(stop, counted);
@@ -461,6 +525,7 @@ export class MirrorWriter {
 
   /** Returns the bytes that the parse worker can still reserve. */
   roomBytes(): number {
+    this.releaseSeen();
     return this.reservation.room();
   }
 
@@ -471,10 +536,18 @@ export class MirrorWriter {
   /** Returns the store memory in bytes: wasm memory, the header and all
    *  mirrors, by their current lengths. `STORE_KIB` holds it. */
   storeBytes(): number {
+    this.releaseSeen();
+    return this.countBytes();
+  }
+
+  /** `storeBytes` without the release of the old buffers. */
+  private countBytes(): number {
     const memory = this.memory();
-    let views = this.folders.byteLength;
+    let views = 0;
+    for (const chunk of this.folders) views += chunk.byteLength;
     for (const set of this.sets) {
       views +=
+        set.retired +
         set.rollups.byteLength +
         set.permutation.byteLength +
         set.permutationInfo.byteLength +
@@ -493,27 +566,147 @@ export class MirrorWriter {
    *  changed, then commits the folder count. */
   private copyFolders(source: StoreSource): void {
     const count = source.folderCount();
-    ensure(this.folders, count * FOLDER_RECORD_BYTES, this.reservation);
-    const target = new Uint32Array(this.folders);
+    this.ensureFolders(count);
     const words = FOLDER_RECORD_BYTES / 4;
-    const memory = this.memory();
-    if (count > this.copiedFolders) {
-      const from = this.copiedFolders * words;
-      const records = new Uint32Array(memory, source.folderPtr() + from * 4, count * words - from);
-      target.set(records, from);
-    }
     const updates = source.folderUpdateCount();
+    const updatesPtr = updates > 0 ? source.folderUpdatesPtr() : 0;
+    const folderPtr = source.folderPtr();
+    // Make the wasm views after the wasm calls above.
+    const ids = updates > 0 ? new Uint32Array(this.memory(), updatesPtr, updates).slice() : [];
+    const records = new Uint32Array(this.memory(), folderPtr, count * words);
+    // Copies the records from `first` to `end` (exclusive), chunk by chunk.
+    const copy = (first: number, end: number) => {
+      while (first < end) {
+        const chunk = first >>> FOLDER_CHUNK_BITS;
+        const base = chunk * FOLDER_CHUNK_RECORDS;
+        const last = Math.min(end, base + FOLDER_CHUNK_RECORDS);
+        new Uint32Array(this.folders[chunk]!).set(
+          records.subarray(first * words, last * words),
+          (first - base) * words,
+        );
+        first = last;
+      }
+    };
+    if (count > this.copiedFolders) {
+      copy(this.copiedFolders, count);
+    }
     if (updates > 0) {
-      const ids = new Uint32Array(memory, source.folderUpdatesPtr(), updates).slice();
-      const records = new Uint32Array(memory, source.folderPtr(), count * words);
       for (const id of ids) {
         // A u32 store does not tear, so the UI can read the record now.
-        target.set(records.subarray(id * words, id * words + words), id * words);
+        copy(id, id + 1);
       }
       source.clearFolderUpdates();
     }
     Atomics.store(this.header, Header.FOLDER_COUNT, count);
     this.copiedFolders = count;
+  }
+
+  /** Makes the folder chunks hold `count` records. A chunk goes to the UI
+   *  one time, when it is made. It grows in place, so a record that
+   *  changes later is in the buffer that the UI has. */
+  private ensureFolders(count: number): void {
+    const bytes = count * FOLDER_RECORD_BYTES;
+    const chunks = Math.ceil(count / FOLDER_CHUNK_RECORDS);
+    // The chunks before the last one are full.
+    for (let chunk = Math.max(0, this.folders.length - 1); chunk < chunks; chunk++) {
+      if (chunk === this.folders.length) {
+        const buffer = this.reserveSpace(FOLDER_CHUNK_BYTES, FOLDER_CHUNK_BYTES);
+        this.folders.push(buffer);
+        this.send({ kind: "folders", index: chunk, buffer });
+      }
+      const inChunk = Math.min(FOLDER_CHUNK_BYTES, bytes - chunk * FOLDER_CHUNK_BYTES);
+      ensure(this.folders[chunk]!, inChunk, this.reservation);
+    }
+  }
+
+  /**
+   * Makes the buffer `kind` of set `index` hold `bytes`. It grows in place
+   * up to its `maxByteLength`. Past it, the view moves to a new, larger
+   * buffer, which goes to the UI with the next epoch of the set. The UI
+   * does not read this set now, and later reads it only with the buffers of
+   * the epoch in `VIEW_EPOCH_n`.
+   */
+  private ensureView(index: 0 | 1, kind: ViewKind, bytes: number): void {
+    const set = this.sets[index];
+    const old = set[kind];
+    if (bytes > this.maxBytes) {
+      throw new Error("A view is larger than the memory limit");
+    }
+    if (bytes > old.maxByteLength) {
+      const buffer = this.reserveSpace(
+        nextMax(old.maxByteLength, bytes, this.maxBytes),
+        Math.ceil(bytes / 65536) * 65536,
+      );
+      try {
+        ensure(buffer, bytes, this.reservation);
+        set.retired += old.byteLength;
+      } catch (error) {
+        if (!(error instanceof MemoryLimitError)) throw error;
+        // A growth in place would not count the old buffer: give it back
+        // now, so that a move fits where a growth in place would fit. Then
+        // the UI can hold this old buffer, one for each view that moved this
+        // way, more than the count says, until it gets the new buffers.
+        this.reservation.give(old.byteLength);
+        try {
+          ensure(buffer, bytes, this.reservation);
+        } catch (again) {
+          this.reservation.reservations.addStore(old.byteLength);
+          throw again;
+        }
+      }
+      set[kind] = buffer;
+      set.epoch++;
+      // The new buffer is empty: write the view again.
+      set.written[WRITTEN_INDEX[kind]] = "";
+      this.send({ kind, set: index, epoch: set.epoch, buffer });
+      return;
+    }
+    ensure(old, bytes, this.reservation);
+  }
+
+  /**
+   * Makes a growable buffer of `maxBytes`. When the browser cannot reserve
+   * that address space, it tries twice `neededBytes`, then `neededBytes`.
+   * When it cannot reserve any, throws a `MemoryLimitError`, so that the
+   * parse stops at the memory limit and keeps its listing.
+   */
+  private reserveSpace(maxBytes: number, neededBytes: number): SharedArrayBuffer {
+    const sizes = [maxBytes, Math.min(maxBytes, neededBytes * 2), neededBytes];
+    for (const bytes of new Set(sizes.filter((size) => size >= neededBytes))) {
+      try {
+        return growable(bytes);
+      } catch (error) {
+        if (!(error instanceof RangeError)) throw error;
+      }
+    }
+    throw new MemoryLimitError(this.stopBytes(), this.maxBytes);
+  }
+
+  /** Gives back the old buffers of each set whose new buffers the UI has. */
+  private releaseSeen(): void {
+    let released = false;
+    for (const index of [0, 1] as const) {
+      const set = this.sets[index];
+      if (set.retired > 0 && Atomics.load(this.header, LENGTH_SLOTS[index].seen) === set.epoch) {
+        this.reservation.give(set.retired);
+        set.retired = 0;
+        released = true;
+      }
+    }
+    if (released) {
+      Atomics.store(this.header, Header.STORE_KIB, Math.ceil(this.countBytes() / 1024));
+    }
+  }
+
+  /** Gives back the old buffers of all sets when the parse ends. No
+   *  publish comes to see the UI receive the new ones, which it does one
+   *  message later. */
+  settle(): void {
+    for (const set of this.sets) {
+      this.reservation.give(set.retired);
+      set.retired = 0;
+    }
+    Atomics.store(this.header, Header.STORE_KIB, Math.ceil(this.storeBytes() / 1024));
   }
 
   /** Copies the rollups, the permutation and the flattened tree into a
@@ -533,10 +726,10 @@ export class MirrorWriter {
       `${length}:${source.permutationVersion()}`,
       `${treeRows}:${source.treeVersion()}`,
     ];
-    ensure(set.rollups, folders * ROLLUP_RECORD_BYTES, this.reservation);
-    ensure(set.permutation, (length + files) * 4, this.reservation);
-    ensure(set.permutationInfo, length * 4, this.reservation);
-    ensure(set.tree, treeWords * 4, this.reservation);
+    this.ensureView(index, "rollups", folders * ROLLUP_RECORD_BYTES);
+    this.ensureView(index, "permutation", (length + files) * 4);
+    this.ensureView(index, "permutationInfo", length * 4);
+    this.ensureView(index, "tree", treeWords * 4);
     // Make the wasm views after the calls above.
     const memory = this.memory();
     if (versions[0] !== set.written[0]) {
@@ -569,6 +762,8 @@ export class MirrorWriter {
     Atomics.store(this.header, slots.sort, sort);
     Atomics.store(this.header, slots.files, files);
     Atomics.store(this.header, slots.treeOrder, source.treeOrder?.() ?? TreeOrder.ARCHIVE);
+    Atomics.store(this.header, slots.epoch, set.epoch);
+    Atomics.store(this.header, slots.folders, folders);
   }
 
   private copyRows(source: StoreSource, memory: ArrayBuffer, rows: number) {
