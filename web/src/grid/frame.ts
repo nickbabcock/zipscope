@@ -13,6 +13,8 @@ export interface FrameSource {
   visibleFolders(): number;
   views(): ViewSet | undefined;
   stable(set: ViewSet): boolean;
+  /** True when a set is published but a buffer of it has not arrived. */
+  viewsPending?(): boolean;
   /** True when the header arrived. Without it, no views come. */
   opened(): boolean;
 }
@@ -78,6 +80,10 @@ export function drawFrame(
       // Values of a partial listing (cancelled or failed) are lower bounds.
       settling: state !== State.COMPLETE,
     };
+    // A set whose buffer is on the way is not drawn. Read again: a publish
+    // during the read can have made another set active. Else the screen
+    // keeps the last stable frame until the buffer arrives.
+    if (views === undefined && source.viewsPending?.() === true) continue;
     const prepared = render(frame);
     stable = views === undefined || source.stable(views);
     if (stable) {

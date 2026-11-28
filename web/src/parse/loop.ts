@@ -105,7 +105,13 @@ export type LoopWriter = Pick<MirrorWriter, "publish"> &
   Partial<
     Pick<
       MirrorWriter,
-      "allocatedBytes" | "stopBytes" | "storeBytes" | "healthChanged" | "shows" | "listingBehind"
+      | "allocatedBytes"
+      | "stopBytes"
+      | "storeBytes"
+      | "healthChanged"
+      | "shows"
+      | "listingBehind"
+      | "settle"
     >
   >;
 
@@ -175,6 +181,7 @@ export function parseInBatches(
       budget?.onRowsMissing?.();
     }
     ended = true;
+    writer.settle?.();
     Atomics.store(view, Header.STATE, final.state);
     channel.port1.close();
     channel.port2.close();

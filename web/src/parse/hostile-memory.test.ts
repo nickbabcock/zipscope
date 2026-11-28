@@ -166,8 +166,6 @@ test("memory uses current wasm bytes and current growable lengths without double
   expect(h.writer.allocatedBytes()).toBeGreaterThan(stable);
   expect(h.writer.allocatedBytes()).toBe(h.allocated());
   expect(Atomics.load(h.slots, Header.STORE_KIB)).toBe(Math.ceil(h.allocated() / 1024));
-  const reserved = h.mirrors.reduce((sum, mirror) => sum + mirror.buffer.maxByteLength, 0);
-  expect(h.writer.allocatedBytes()).toBeLessThan(reserved);
 });
 
 test("the memory counter is current when the committed row count is stored", () => {

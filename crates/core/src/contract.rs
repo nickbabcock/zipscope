@@ -3,7 +3,7 @@
 //! `values` lists them for the test that compares the two sides.
 
 /// The version of the shared-memory layout.
-pub const LAYOUT_VERSION: u32 = 3;
+pub const LAYOUT_VERSION: u32 = 4;
 
 /// Rows in one column page.
 pub const PAGE_ROWS: usize = 1 << 16;

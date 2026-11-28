@@ -395,6 +395,10 @@ function publishTreeOrder(parser: Parser, writer: MirrorWriter): void {
   } catch (err) {
     if (!(err instanceof MemoryLimitError)) throw err;
     stopAtMemoryLimit(err);
+  } finally {
+    // After the parse, no publish may follow to give back the old buffers
+    // of a view that moved.
+    if (!parsing) writer.settle();
   }
 }
 
@@ -471,6 +475,10 @@ async function viewRequest(
       stopAtMemoryLimit(err, kind);
     }
     throw err;
+  } finally {
+    // After the parse, no publish may follow to give back the old buffers
+    // of a view that moved.
+    if (!parsing) archive?.writer.settle();
   }
 }
 
